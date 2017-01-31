@@ -8,6 +8,7 @@ import numpy as np
 from pandas import DataFrame, read_csv
 from sklearn.datasets import make_classification, make_regression
 from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.linear_model import SGDRegressor
 from sklearn.externals import joblib
 from sklearn.model_selection import train_test_split
 
@@ -119,12 +120,63 @@ def setUpModule():
     multiclass_param_file = open('multiclass/search_params.json', 'w')
     json.dump(multiclass_search_params, multiclass_param_file)
     multiclass_param_file.close()
-    # TODO: Create grid + model + data for regression.
+
+    os.mkdir('regression')
+    regression_X, regression_y = make_regression()
+
+    feature_cols = \
+        ["feature_{}".format(ii) 
+         for ii in range(regression_X.shape[1])]
+
+    regression_X_train, regression_X_test,\
+    regression_y_train, regression_y_test = \
+        train_test_split(regression_X, regression_y, test_size=0.33)
+
+    # Make data frames out of the training and test sets to send them to csv
+    # files.
+    regression_train = \
+        DataFrame(data = np.c_[regression_X_train, regression_y_train],
+                  columns = feature_cols + ['target'])
+                  
+    regression_test = \
+        DataFrame(data = np.c_[regression_X_test, regression_y_test],
+                  columns = feature_cols + ['target'])
+
+    regression_train.to_csv('regression/train.csv')
+    regression_test.to_csv('regression/test.csv')
+    
+    # Make the binary classification model.
+    regression_model = SGDRegressor()
+    joblib.dump(regression_model, 'regression/regressor.pkl')
+
+    # Make the parameter grid for binary classification.
+    regression_search_params = {
+        "fit_params": {
+            "coef_init": 0.1,
+            "intercept_init": 0.1
+        },
+        "param_grid": {
+            "alpha": [0.00001, 0.001, 0.01],
+            "n_iter":[2, 5, 10]
+        },
+        "scoring": [
+            "neg_mean_absolute_error",
+            "neg_mean_squared_error",
+            "neg_median_absolute_error",
+            "r2"
+        ]
+    }
+
+    regression_param_file = open('regression/search_params.json', 'w')
+    json.dump(regression_search_params, regression_param_file)
+    regression_param_file.close()
+
 
 def tearDownModule():
     # Delete the data.
     subprocess.run(['rm', '-rf', 'classification/'])
     subprocess.run(['rm', '-rf', 'multiclass/'])
+    subprocess.run(['rm', '-rf', 'regression/'])
 
 class UbergridUnitTest(TestCase):
     
@@ -200,5 +252,36 @@ class UbergridUnitTest(TestCase):
                          sorted(result_keys_truth))
 
         param_file.close()
+    
+    def test_evaluate_model_regression(self):
+        # Read in all the stuff we want.
+        estimator = joblib.load('regression/regressor.pkl')
+        training_data = read_csv('regression/train.csv')
+        X = training_data[[c for c in training_data.columns if c != "target"]]
+        y = training_data[['target']]
+        param_file = open('regression/search_params.json', 'r')
+        search_params = json.load(param_file)
+        metrics = search_params['scoring']
+        prefix = "train"
 
-        pass
+        estimator.fit(X,y)
+
+        results = ug._evaluate_model(estimator, X, y, metrics, prefix)
+
+        # The values will vary from run to run. Here we want to test that all
+        # of the fields in the result set are present.
+
+        result_keys_truth = [
+            "train_total_prediction_time",
+            "train_total_prediction_records",
+            "train_neg_mean_absolute_error",
+            "train_neg_mean_squared_error",
+            "train_neg_median_absolute_error",
+            "train_r2"
+
+        ]
+
+        self.assertEqual(sorted(list(results.keys())), 
+                         sorted(result_keys_truth))
+
+        param_file.close()

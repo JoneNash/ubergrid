@@ -285,3 +285,40 @@ class UbergridUnitTest(TestCase):
                          sorted(result_keys_truth))
 
         param_file.close()
+
+    def test_train_model(self):
+        # TODO: Implement.
+        # Read in the stuff we need.
+        estimator = joblib.load('classification/classifier.pkl')
+        training_data = read_csv('classification/train.csv')
+        X = training_data[[c for c in training_data.columns if c != 'target']]
+        y = training_data[['target']]
+        search_param_file = open('classification/search_params.json','r')
+        search_params = json.load(search_param_file)
+        metrics = search_params['scoring']
+        fit_params = search_params['fit_params']
+
+        estimator, results = \
+            ug._train_model(estimator, X, y, metrics, fit_params)
+
+        # The estimator object will crash if fit isn't called, so the test
+        # will fail if that's incorrect. This tests to ensure _evaluate_model
+        # is called properly.
+
+        result_keys_truth = [
+           "train_accuracy",
+           "train_f1",
+           "train_precision",
+           "train_recall",
+           "train_log_loss",
+           "train_roc_auc",
+           "train_average_precision",
+           "train_total_prediction_time",
+           "train_total_prediction_records",
+           "train_time_total"
+        ]
+
+        self.assertEqual(sorted(list(results.keys())),
+                         sorted(result_keys_truth))
+        
+        search_param_file.close()

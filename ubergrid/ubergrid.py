@@ -67,8 +67,8 @@ def _train_model(estimator: BaseEstimator,
     estimator.fit(X,y, **fit_params)
     fit_end = time()
 
-    results = _evaluate_model(estimator, X, y, metrics, "training")
-    results["training_time_total"] = fit_end - fit_start
+    results = _evaluate_model(estimator, X, y, metrics, "train")
+    results["train_time_total"] = fit_end - fit_start
 
     return estimator, results
 

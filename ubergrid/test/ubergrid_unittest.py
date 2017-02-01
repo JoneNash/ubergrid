@@ -15,13 +15,16 @@ from sklearn.model_selection import train_test_split, ParameterGrid
 import ubergrid as ug
 
 TEST_OUTPUT_DIR = "classification_test"
+CLASSIFICATION_DIR = "classification"
+MULTICLASS_DIR = "multiclass"
+REGRESSION_DIR = "regression"
 
 def setUpModule():
     os.mkdir(TEST_OUTPUT_DIR)
 
     # Make a directory to store the classification data, model, and
     # results.
-    os.mkdir('classification')
+    os.mkdir(CLASSIFICATION_DIR)
     classification_X, classification_y = make_classification()
     feature_cols = \
         ["feature_{}".format(ii) 
@@ -41,12 +44,12 @@ def setUpModule():
         DataFrame(data = np.c_[classification_X_test, classification_y_test],
                   columns = feature_cols + ['target'])
 
-    classification_train.to_csv('classification/train.csv')
-    classification_test.to_csv('classification/test.csv')
+    classification_train.to_csv(CLASSIFICATION_DIR + '/train.csv')
+    classification_test.to_csv(CLASSIFICATION_DIR + '/test.csv')
     
     # Make the binary classification model.
     classification_model = GradientBoostingClassifier()
-    joblib.dump(classification_model, 'classification/classifier.pkl')
+    joblib.dump(classification_model, CLASSIFICATION_DIR + '/classifier.pkl')
 
     # Make the parameter grid for binary classification.
     classification_search_params = {
@@ -68,13 +71,13 @@ def setUpModule():
         ]
     }
 
-    param_file = open('classification/search_params.json', 'w')
+    param_file = open(CLASSIFICATION_DIR + '/search_params.json', 'w')
     json.dump(classification_search_params, param_file)
     param_file.close()
         
     # Make a directory to store the multiclass data, model, and
     # results.
-    os.mkdir('multiclass')
+    os.mkdir(MULTICLASS_DIR)
     multiclass_X, multiclass_y = make_classification(n_classes=3, 
                                                      n_informative=3)
     feature_cols = \
@@ -95,12 +98,12 @@ def setUpModule():
         DataFrame(data = np.c_[multiclass_X_test, multiclass_y_test],
                   columns = feature_cols + ['target'])
 
-    multiclass_train.to_csv('multiclass/train.csv')
-    multiclass_test.to_csv('multiclass/test.csv')
+    multiclass_train.to_csv(MULTICLASS_DIR + '/train.csv')
+    multiclass_test.to_csv(MULTICLASS_DIR + '/test.csv')
     
     # Make the binary classification model.
     multiclass_model = GradientBoostingClassifier()
-    joblib.dump(multiclass_model, 'multiclass/classifier.pkl')
+    joblib.dump(multiclass_model, MULTICLASS_DIR + '/classifier.pkl')
 
     # Make the parameter grid for binary classification.
     multiclass_search_params = {
@@ -121,11 +124,11 @@ def setUpModule():
         ]
     }
 
-    multiclass_param_file = open('multiclass/search_params.json', 'w')
+    multiclass_param_file = open(MULTICLASS_DIR + '/search_params.json', 'w')
     json.dump(multiclass_search_params, multiclass_param_file)
     multiclass_param_file.close()
 
-    os.mkdir('regression')
+    os.mkdir(REGRESSION_DIR)
     regression_X, regression_y = make_regression()
 
     feature_cols = \
@@ -146,12 +149,12 @@ def setUpModule():
         DataFrame(data = np.c_[regression_X_test, regression_y_test],
                   columns = feature_cols + ['target'])
 
-    regression_train.to_csv('regression/train.csv')
-    regression_test.to_csv('regression/test.csv')
+    regression_train.to_csv(REGRESSION_DIR + '/train.csv')
+    regression_test.to_csv(REGRESSION_DIR + '/test.csv')
     
     # Make the binary classification model.
     regression_model = SGDRegressor()
-    joblib.dump(regression_model, 'regression/regressor.pkl')
+    joblib.dump(regression_model, REGRESSION_DIR + '/regressor.pkl')
 
     # Make the parameter grid for binary classification.
     regression_search_params = {
@@ -171,16 +174,16 @@ def setUpModule():
         ]
     }
 
-    regression_param_file = open('regression/search_params.json', 'w')
+    regression_param_file = open(REGRESSION_DIR + '/search_params.json', 'w')
     json.dump(regression_search_params, regression_param_file)
     regression_param_file.close()
 
 
 def tearDownModule():
     # Delete the data.
-    subprocess.run(['rm', '-rf', 'classification/'])
-    subprocess.run(['rm', '-rf', 'multiclass/'])
-    subprocess.run(['rm', '-rf', 'regression/'])
+    subprocess.run(['rm', '-rf', CLASSIFICATION_DIR])
+    subprocess.run(['rm', '-rf', MULTICLASS_DIR])
+    subprocess.run(['rm', '-rf', REGRESSION_DIR])
     subprocess.run(['rm', '-rf', TEST_OUTPUT_DIR])
 
 class UbergridUnitTest(TestCase):
@@ -417,7 +420,8 @@ class UbergridUnitTest(TestCase):
             sorted(list(results.keys())),
             sorted(result_keys_truth))
         
-        self.assertEqual(results["training_file"], "classification/train.csv")
+        self.assertEqual(results["training_file"], 
+                         CLASSIFICATION_DIR + "/train.csv")
 
         self.assertEqual(results["target"], "target")
         
@@ -425,7 +429,8 @@ class UbergridUnitTest(TestCase):
             results["model_file"],
             "{}/model_{}.pkl".format(output_dir, model_id))
 
-        self.assertEqual(results["validation_file"], "classification/test.csv")
+        self.assertEqual(results["validation_file"], 
+                         CLASSIFICATION_DIR + "/test.csv")
 
         # Cleanup.
         search_param_file.close()

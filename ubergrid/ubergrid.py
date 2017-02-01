@@ -64,13 +64,74 @@ def _train_model(estimator: BaseEstimator,
     TODO: Write docstring.
     """
     fit_start = time()
-    estimator.fit(X,y, **fit_params)
+    estimator.fit(X, y, **fit_params)
     fit_end = time()
 
-    results = _evaluate_model(estimator, X, y, metrics, "train")
-    results["train_time_total"] = fit_end - fit_start
+    results = _evaluate_model(estimator, X, y, metrics, "training")
+    results["training_time_total"] = fit_end - fit_start
 
     return estimator, results
+
+def _train_and_evaluate(estimator: BaseEstimator,
+                        params: Dict[str, Any],
+                        model_id: int,
+                        training_file: str,
+                        output_dir: str,
+                        X_train: DataFrame,
+                        y_train: DataFrame,
+                        target_col: str,
+                        metrics: List[str],
+                        fit_params:Dict[str, Any],
+                        X_validation: DataFrame = None,
+                        y_validation: DataFrame = None,
+                        validation_file: str = None) -> None:
+    """
+    TODO: Write docstring.
+    """
+    model_file = "{}/model_{}.pkl".format(output_dir, model_id)
+    results_file = "{}/results_{}.json".format(output_dir, model_id)
+        
+    # If the results file already exists, skip this pass.
+    if os.path.exists(results_file):
+        return
+
+    # Initialize the estimator with the params.
+    estimator.set_params(**params)
+
+    model, training_results = \
+        _train_model(estimator, 
+                     X_train, 
+                     y_train, 
+                     metrics, 
+                     fit_params)
+
+    # If the validation set is defined, use _evaluate_model to evaluate the 
+    # model. Otherwise this is an empty dict.
+    validation_results = \
+        _evaluate_model(estimator, 
+                        X_validation, 
+                        y_validation, 
+                        metrics,
+                        "validation") \
+        if validation_file is not None else {}
+    
+    # Construct and write the results for this run.
+    results = {
+        "training_file": training_file,
+        "target": target_col,
+        "model_file": model_file,
+        **training_results,
+        **validation_results,
+        **params
+    }
+
+    # Add the validation set file if present.
+    if validation_file:
+        results["validation_file"] = validation_file
+
+    # Write the results _after_ the model.
+    joblib.dump(estimator, model_file)
+    json.dump(results, open(results_file, 'w'))
 
 def _main(search_params: Dict[str, Any],
           target_col: str,
@@ -80,6 +141,11 @@ def _main(search_params: Dict[str, Any],
     """
     TODO: Write docstring.
     """
+
+    # The output directory could exist, especially if some of the results were
+    # completed in a previous run.
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
     
     training_set = read_csv(training_file, 'r')
     validation_set = read_csv(validation_file, 'r')
@@ -96,62 +162,28 @@ def _main(search_params: Dict[str, Any],
     y_train = training_set[[target_col]]
 
     # Initialize the validation stuff only if there's a validation set present.
-    if validation_set is not None:
-        X_validation = validation_set[feature_cols]
-        y_validation = validation_set[[target_col]]
+    X_validation = validation_set[feature_cols] if validation_set else None
+    y_validation = validation_set[[target_col]] if validation_set else None
 
     # This is an extremely sophisticated model ID scheme. Do note that things
     # will be overwritten if there's already stuff in the output directory, 
-    # possibly. It will be bad if there's stuff from a different run.
+    # possibly. It will be bad if there's stuff from a different run (meaning
+    # a run for a different estimator / parameter grid).
     for model_id, params in enumerate(grid):
-        
-        model_file = "{}/model_{}.pkl".format(output_dir, model_id)
-        results_file = "{}/results_{}.json".format(output_dir, model_id)
-        
-        # If the results file already exists, skip this pass.
-        if os.path.exists(results_file):
-            continue
-
-        # Initialize the estimators with the 
-        estimator.set_params(**params)
-
-        training_results, model = \
-            _train_model(estimator, 
-                         X_train, 
-                         y_train, 
-                         evaluation_metrics, 
-                         fit_params)
-
-        # If the validation set is defined, use _evaluate_model to evaluate the 
-        # model. Otherwise this is an empty dict.
-        validation_results = \
-            _evaluate_model(estimator, 
-                            X_validation, 
-                            y_validation, 
-                            evaluation_metrics,
-                            "validation") \
-            if validation_set is not None else {}
-        
-        # Construct and write the results for this run.
-        results = {
-            "training_file": training_file,
-            "target": target_col,
-            "model_file": model_file,
-            **training_results,
-            **validation_results,
-            **params
-        }
-
-        # Add the validation set file if present.
-        if validation_set:
-            results["validation_file"] = validation_file
-
-        # Write the results _after_ the model.
-        joblib.dumps(estimator, model_file)
-        json.dump(results, open(results_file, 'w'))
-        
-    # Unify all of the results files into one, and remove the intermediate
-    # results files.
+       _train_and_evaluate(estimator,
+                           params,
+                           model_id,
+                           training_file,
+                           X_train,
+                           y_train,
+                           target_col,
+                           search_params['scoring'],
+                           search_params['fit_params'],
+                           X_validation,
+                           y_validation,
+                           validation_file)
+ 
+    # Unify all of the results files into one.
     subprocess.run(["cat", 
                     "{}/results_*_.json".format(output_dir),
                     ">",

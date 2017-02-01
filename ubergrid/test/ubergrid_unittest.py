@@ -10,11 +10,15 @@ from sklearn.datasets import make_classification, make_regression
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.linear_model import SGDRegressor
 from sklearn.externals import joblib
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, ParameterGrid
 
 import ubergrid as ug
 
+TEST_OUTPUT_DIR = "classification_test"
+
 def setUpModule():
+    os.mkdir(TEST_OUTPUT_DIR)
+
     # Make a directory to store the classification data, model, and
     # results.
     os.mkdir('classification')
@@ -177,6 +181,7 @@ def tearDownModule():
     subprocess.run(['rm', '-rf', 'classification/'])
     subprocess.run(['rm', '-rf', 'multiclass/'])
     subprocess.run(['rm', '-rf', 'regression/'])
+    subprocess.run(['rm', '-rf', TEST_OUTPUT_DIR])
 
 class UbergridUnitTest(TestCase):
     
@@ -306,19 +311,123 @@ class UbergridUnitTest(TestCase):
         # is called properly.
 
         result_keys_truth = [
-           "train_accuracy",
-           "train_f1",
-           "train_precision",
-           "train_recall",
-           "train_log_loss",
-           "train_roc_auc",
-           "train_average_precision",
-           "train_total_prediction_time",
-           "train_total_prediction_records",
-           "train_time_total"
+           "training_accuracy",
+           "training_f1",
+           "training_precision",
+           "training_recall",
+           "training_log_loss",
+           "training_roc_auc",
+           "training_average_precision",
+           "training_total_prediction_time",
+           "training_total_prediction_records",
+           "training_time_total"
         ]
 
         self.assertEqual(sorted(list(results.keys())),
                          sorted(result_keys_truth))
         
         search_param_file.close()
+
+    def test_train_and_evaluate(self):
+        # Read the stuff we need.
+        estimator = joblib.load('classification/classifier.pkl')
+        
+        search_param_file = open('classification/search_params.json', 'r')
+        search_params = json.load(search_param_file)
+        params = ParameterGrid(search_params['param_grid'])[0]
+        
+        model_id = 0
+        
+        training_file = 'classification/train.csv'
+        validation_file = 'classification/test.csv'
+
+        training_data = read_csv(training_file)
+        validation_data = read_csv(validation_file)
+
+        X_train = \
+            training_data[[c for c in training_data.columns if c != 'target']]
+        X_validation = \
+            validation_data[[c for c in validation_data.columns 
+                             if c != 'target']]
+        y_train = training_data[['target']]
+        y_validation = validation_data[['target']]
+
+        metrics = search_params['scoring']
+        fit_params = search_params['fit_params']
+        target_col = "target"
+        
+        output_dir = TEST_OUTPUT_DIR
+
+        ug._train_and_evaluate(
+            estimator,
+            params,
+            model_id,
+            training_file,
+            output_dir,
+            X_train,
+            y_train,
+            target_col,
+            metrics,
+            fit_params,
+            X_validation = X_validation,
+            y_validation = y_validation,
+            validation_file = validation_file)
+
+        result_keys_truth = [
+           "training_accuracy",
+           "training_f1",
+           "training_precision",
+           "training_recall",
+           "training_log_loss",
+           "training_roc_auc",
+           "training_average_precision",
+           "training_total_prediction_time",
+           "training_total_prediction_records",
+           "training_time_total",
+           "validation_accuracy",
+           "validation_f1",
+           "validation_precision",
+           "validation_recall",
+           "validation_log_loss",
+           "validation_roc_auc",
+           "validation_average_precision",
+           "validation_total_prediction_time",
+           "validation_total_prediction_records",
+           "training_file",
+           "target",
+           "model_file",
+           "validation_file",
+           "max_depth",
+           "n_estimators"
+        ]
+
+        # Check that the estimator file exists.
+        self.assertTrue(
+            os.path.exists("{}/model_{}.pkl".format(output_dir, model_id)))
+
+        # Check that the results file exists.
+        self.assertTrue(
+            os.path.exists("{}/results_{}.json".format(output_dir, model_id)))
+        
+        # Read in the results file.
+        result_file = open("{}/results_{}.json".format(output_dir, model_id))
+        results = json.load(result_file)
+
+        self.assertEqual(
+            sorted(list(results.keys())),
+            sorted(result_keys_truth))
+        
+        self.assertEqual(results["training_file"], "classification/train.csv")
+
+        self.assertEqual(results["target"], "target")
+        
+        self.assertEqual(
+            results["model_file"],
+            "{}/model_{}.pkl".format(output_dir, model_id))
+
+        self.assertEqual(results["validation_file"], "classification/test.csv")
+
+        # Cleanup.
+        search_param_file.close()
+        result_file.close()
+        pass

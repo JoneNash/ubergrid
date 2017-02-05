@@ -68,7 +68,8 @@ def setUpModule():
             "log_loss",
             "roc_auc",
             "average_precision"
-        ]
+        ],
+        "estimator": CLASSIFICATION_DIR + "/classifier.pkl"
     }
 
     param_file = open(CLASSIFICATION_DIR + '/search_params.json', 'w')
@@ -121,7 +122,8 @@ def setUpModule():
             "precision_macro",
             "recall_micro",
             "recall_macro"
-        ]
+        ],
+        "estimator": MULTICLASS_DIR + "/classifier.pkl"
     }
 
     multiclass_param_file = open(MULTICLASS_DIR + '/search_params.json', 'w')
@@ -171,7 +173,8 @@ def setUpModule():
             "neg_mean_squared_error",
             "neg_median_absolute_error",
             "r2"
-        ]
+        ],
+        "estimator": REGRESSION_DIR + "/regressor.pkl"
     }
 
     regression_param_file = open(REGRESSION_DIR + '/search_params.json', 'w')
@@ -295,7 +298,6 @@ class UbergridUnitTest(TestCase):
         param_file.close()
 
     def test_train_model(self):
-        # TODO: Implement.
         # Read in the stuff we need.
         estimator = joblib.load('classification/classifier.pkl')
         training_data = read_csv('classification/train.csv')
@@ -436,3 +438,81 @@ class UbergridUnitTest(TestCase):
         search_param_file.close()
         result_file.close()
         pass
+
+    def test_main(self):
+        # Set up the inputs. Thankfully this is a little simpler than the other
+        # methods.
+        search_params_file = CLASSIFICATION_DIR + "/search_params.json"
+        training_file = CLASSIFICATION_DIR + "/train.csv"
+        target_col = "target"
+        output_dir = TEST_OUTPUT_DIR
+        validation_file = CLASSIFICATION_DIR + "/test.csv"
+
+        ug._main(search_params_file,
+                 target_col,
+                 training_file,
+                 output_dir,
+                 validation_file=validation_file)
+        
+        result_keys_truth = [
+           "training_accuracy",
+           "training_f1",
+           "training_precision",
+           "training_recall",
+           "training_log_loss",
+           "training_roc_auc",
+           "training_average_precision",
+           "training_total_prediction_time",
+           "training_total_prediction_records",
+           "training_time_total",
+           "validation_accuracy",
+           "validation_f1",
+           "validation_precision",
+           "validation_recall",
+           "validation_log_loss",
+           "validation_roc_auc",
+           "validation_average_precision",
+           "validation_total_prediction_time",
+           "validation_total_prediction_records",
+           "training_file",
+           "target",
+           "model_file",
+           "validation_file",
+           "max_depth",
+           "n_estimators"
+        ]
+        
+        model_ids = range(9)
+        self.assertTrue(os.path.exists(TEST_OUTPUT_DIR + "/results.json"))
+        for ii in model_ids:
+            self.assertTrue(
+                os.path.exists(TEST_OUTPUT_DIR + "/model_{}.pkl".format(ii)))
+        
+        results = [json.loads(l) for l 
+                   in open(TEST_OUTPUT_DIR + "/results.json", "r").readlines()]
+
+        # Assert that we have the expected number of runs.
+        self.assertEqual(len(results), len(model_ids))
+
+        # For each model id, make sure we have the right columns in the 
+        # associated results structure, as well as the right file names.
+        for model_id, result in zip(model_ids, results):
+            # Assure the file names are filled in correctly.
+            # Training data should be in the initial source directory for the 
+            # job.
+            self.assertEqual(result["training_file"], 
+                              CLASSIFICATION_DIR + "/train.csv")
+            self.assertEqual(result["target"], "target")
+            # Models are stored in the output directory for the grid.
+            self.assertEqual(result["model_file"], 
+                              TEST_OUTPUT_DIR + 
+                              "/model_{}.pkl".format(model_id))
+            # Validation data should be in the initial source directory for the
+            # job.
+            self.assertEqual(result["validation_file"],
+                              CLASSIFICATION_DIR + "/test.csv")
+            # Make sure the metrics are all present.
+            # Technically this is tested in _test_and_evaluate, but checking
+            # twice isn't the worst idea in the world.
+            self.assertEqual(sorted(list(result.keys())),
+                              sorted(result_keys_truth))

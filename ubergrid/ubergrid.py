@@ -1,7 +1,6 @@
 import json
 import sys
 import os
-import subprocess
 import numpy as np
 
 from time import time
@@ -131,9 +130,11 @@ def _train_and_evaluate(estimator: BaseEstimator,
 
     # Write the results _after_ the model.
     joblib.dump(estimator, model_file)
-    json.dump(results, open(results_file, 'w'))
+    with open(results_file, 'w') as results_out:
+        results_out.write(
+            json.dumps(results) + "\n")
 
-def _main(search_params: Dict[str, Any],
+def _main(search_params_file: str,
           target_col: str,
           training_file: str,
           output_dir: str,
@@ -142,13 +143,15 @@ def _main(search_params: Dict[str, Any],
     TODO: Write docstring.
     """
 
+    search_params = json.load(open(search_params_file, 'r'))
+
     # The output directory could exist, especially if some of the results were
     # completed in a previous run.
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
     
-    training_set = read_csv(training_file, 'r')
-    validation_set = read_csv(validation_file, 'r')
+    training_set = read_csv(training_file)
+    validation_set = read_csv(validation_file) if validation_file else None
 
     estimator = joblib.load(search_params['estimator'])
     grid = ParameterGrid(search_params['param_grid'])
@@ -162,8 +165,8 @@ def _main(search_params: Dict[str, Any],
     y_train = training_set[[target_col]]
 
     # Initialize the validation stuff only if there's a validation set present.
-    X_validation = validation_set[feature_cols] if validation_set else None
-    y_validation = validation_set[[target_col]] if validation_set else None
+    X_validation = validation_set[feature_cols] if validation_file else None
+    y_validation = validation_set[[target_col]] if validation_file else None
 
     # This is an extremely sophisticated model ID scheme. Do note that things
     # will be overwritten if there's already stuff in the output directory, 
@@ -174,19 +177,19 @@ def _main(search_params: Dict[str, Any],
                            params,
                            model_id,
                            training_file,
+                           output_dir,
                            X_train,
                            y_train,
                            target_col,
                            search_params['scoring'],
-                           search_params['fit_params'],
-                           X_validation,
-                           y_validation,
-                           validation_file)
+                           fit_params,
+                           X_validation=X_validation,
+                           y_validation=y_validation,
+                           validation_file=validation_file)
  
     # Unify all of the results files into one.
-    subprocess.run(["cat", 
-                    "{}/results_*_.json".format(output_dir),
-                    ">",
-                    "{}/results.json"])
+    os.system(
+        "cat {output_dir}/results_*.json > ".format(output_dir=output_dir) +
+        "{output_dir}/results.json".format(output_dir=output_dir))
     # Remove the intermediate results files.
-    subprocess.run(["rm", "{}/results_*_.json".format(output_dir)])
+    os.system("rm {output_dir}/results_*.json".format(output_dir=output_dir))

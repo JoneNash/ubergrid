@@ -27,7 +27,33 @@ def _evaluate_model(estimator: BaseEstimator,
                     y: DataFrame, 
                     metrics: List[str], 
                     prefix: str) -> Dict[str, Any]:
-    """ TODO: Docstring.
+    """ Evaluates the performance of the model on the provided data, for the
+        provided metrics, and returns a dictionary of results.
+
+        :param estimator: A scikit-learn estimator object (trained).
+        
+        :param X: The data to evaluate the model on, without the true value.
+        
+        :param y: The true values for the data in X.
+        
+        :param metrics: 
+            A list of metric names to test. They must be metrics in
+            scikit-learn's ``SCORERS`` dict 
+            (see `sklearn.metrics <http://scikit-learn.org/stable/modules/model_evaluation.html#the-scoring-parameter-defining-model-evaluation-rules>`_).
+        
+        :param prefix: A string to prefix the fields in the results dict with.
+        
+        :returns: 
+            The results in a dictionary, with one field for each metric,
+            named as ``{prefix}_{metric}``, plus a couple of fields with timing
+            information::
+
+                {
+                    "{prefix}_{metric1}": value,
+                    "{prefix}_{metric2}": value,
+                    "{prefix}_total_prediction_time": time_in_seconds,
+                    "{prefix}_total_prediction_records": number_of_records
+                }
     """
 
     predict_times = []
@@ -59,8 +85,37 @@ def _train_model(estimator: BaseEstimator,
                  metrics: List[str],
                  fit_params: Dict[str, Any]) \
                  -> Tuple[Dict[str, Any], BaseEstimator]:
-    """
-    TODO: Write docstring.
+    """ Trains the model on the provided data, and evaluates it for the provided
+        metrics.
+
+        :param estimator: A scikit-learn estimator object (untrained).
+
+        :param X: The data on which to train the estimator, without the target.
+
+        :param y: The ground truth target for X.
+
+        :param metrics: 
+            A list of strings describing the metrics to calculate
+            against the training data. They must be in scikit-learn's SCORERS dict.
+            See `sklearn.metrics <http://scikit-learn.org/stable/modules/model_evaluation.html#the-scoring-parameter-defining-model-evaluation-rules>`_).
+
+        :param fit_params: 
+            A dictionary of parameters to send to the estimator's
+            ``fit`` method.
+
+        :returns: 
+            A tuple containing the results in a dict, with fields named
+            as ``training_{metric}``, and the trained estimator. The dict also 
+            contains information related to the timing of the model. Here's an
+            example::
+
+                {
+                    "training_{metric}": value,
+                    "training_{metric}": value,
+                    "training_prediction_time": time_for_predictions,
+                    "training_total_prediction_records": number_of_records,
+                    "training_time_total": time_for_training
+                }
     """
     fit_start = time()
     estimator.fit(X, y, **fit_params)
@@ -71,6 +126,9 @@ def _train_model(estimator: BaseEstimator,
 
     return estimator, results
 
+# TODO: This _train_and_evaluate function is kind of a mess. It's not a huge
+# deal since it's internal to the system only, but it might be worth a refactor
+# at some point.
 def _train_and_evaluate(estimator: BaseEstimator,
                         params: Dict[str, Any],
                         model_id: int,
@@ -84,8 +142,87 @@ def _train_and_evaluate(estimator: BaseEstimator,
                         X_validation: DataFrame = None,
                         y_validation: DataFrame = None,
                         validation_file: str = None) -> None:
-    """
-    TODO: Write docstring.
+    """ Performs training and evaluation on a scikit-learn estimator, saving the
+        results to disk.
+    
+        If there are already results in the provided output path,
+        this function skips calculations (for larger grids this allows jobs to be
+        resumed if they fail). This function is designed in this way so that it can
+        be executed in parallel. It writes two files: a joblib-pickled model (in
+        ``{output_dir}/model_{model_id}.pkl``), and
+        a results file that contains a single line JSON object 
+        (``output_dir/results_{}.json``). That object contains
+        all of the performance and timing information related to the run. Here's an
+        example of that file::
+
+            {
+                # Files used to build and evaluate the model.
+                "training_file": "/path/to/training.csv",
+                "model_file": "/path/to/model.pkl",
+                "validation_file": "/path_to_validation.csv", # If used.
+
+                # The name of the target column.
+                "target": "target_col_name",
+
+                # Parameters that identify the model
+                "param_1": param_value_1,
+                "param_2": param_value_2,
+                # ...
+
+                # The metrics for training
+                "training_time_total": time_for_training,
+                "training_prediction_time": time_for_predictions,
+                "training_total_prediction_records": number_of_records,
+                "training_{metric}": value,
+                "training_{metric}": value,
+                # ...
+
+                # The metrics for validation, if validation was performed.
+                "validation_prediction_time": time_for_predictions_validation,
+                "validation_total_prediction_records": number_of_validation_records,
+                "validation_{metric}": value,
+                "validation_{metric}": value,
+                # ...
+
+            }
+
+        :param estimator: The scikit-learn estimator object.
+
+        :param params: The parameters for building the model, as a dict.
+
+        :param model_id: An integer id for the model.
+
+        :param training_file: The name of the file with the training data.
+
+        :param output_dir: The name of the output directory.
+
+        :param X_train: The training data, without the the target column.
+
+        :param y_train: The training data ground-truth values.
+
+        :param target_col: The name of the target column.
+
+        :param metrics: 
+            A list of strings describing the metrics to evaluate. Each
+            string must correspond to a value in scikit-learn's ``SCORERS`` 
+            dict. See `sklearn.metrics <http://scikit-learn.org/stable/modules/model_evaluation.html#the-scoring-parameter-defining-model-evaluation-rules>`_
+
+        :param fit_params: Parameters to pass to the estimator's ``fit`` method.
+
+        :param X_validation: 
+            The validation data, without the target_column.
+            Default: None.
+
+        :param y_validation: 
+            The ground truth target values for the validation data.
+            Default: None.
+
+        :param validation_file: 
+            The name of the file with the validation data.
+            Default: None.
+
+        :returns: Nothing, writes to the files described above.
+        
     """
     model_file = "{}/model_{}.pkl".format(output_dir, model_id)
     results_file = "{}/results_{}.json".format(output_dir, model_id)
@@ -139,8 +276,82 @@ def _main(search_params_file: str,
           training_file: str,
           output_dir: str,
           validation_file: str = None) -> None:
-    """
-    TODO: Write docstring.
+    """ Executes an entire parameter grid, saving all results and models to disk.
+
+        This method runs the ``_train_and_evaluate`` function on each combination
+        of parameters. It's the core function for the module. It loads the estimator
+        from a path specified in the ``search_param_file`` using joblib's pickling
+        capabilities. It builds the grid from that JSON file as well. This function
+        creates (if necessary) and writes all models into a specified
+        directory. It also places a file called ``results.json`` that contains, for
+        each model, one JSON object that has all of the information used to build
+        the model, and all of its performance characteristics.
+        Here's an example of one line::
+
+            {
+                # Files used to build and evaluate the model.
+                "training_file": "/path/to/training.csv",
+                "model_file": "/path/to/model.pkl",
+                "validation_file": "/path_to_validation.csv", # If used.
+
+                # The name of the target column.
+                "target": "target_col_name",
+
+                # Parameters that identify the model
+                "param_1": param_value_1,
+                "param_2": param_value_2,
+                # ...
+
+                # The metrics for training
+                "training_time_total": time_for_training,
+                "training_prediction_time": time_for_predictions,
+                "training_total_prediction_records": number_of_records,
+                "training_{metric}": value,
+                "training_{metric}": value,
+                # ...
+
+                # The metrics for validation, if validation was performed.
+                "validation_prediction_time": time_for_predictions_validation,
+                "validation_total_prediction_records": number_of_validation_records,
+                "validation_{metric}": value,
+                "validation_{metric}": value,
+                # ...
+
+            }
+
+        :param search_params_file: 
+            The name of the JSON file with the search 
+            parameters. The file itself should have the following structure::
+            
+                {
+                    # These are passed to the fit method of each estimator.
+                    "fit_params": {
+                        "fit_param_1": value,
+                        "fit_param_2": value
+                    },
+                    "param_grid": {
+                        "param_1": [value, value, value],
+                        "param_2": [value, value, value]
+                    },
+                    "scoring": [metric, metric, metric],
+                    # The estimator should be pickled with joblib.
+                    "estimator": "/path/to/estimator.pkl"
+                }
+    
+        :param target_col: 
+            The name of the column containing the target variable.
+    
+        :param training_file: The name of the file containing the training data.
+
+        :param output_dir: The name of the output directory.
+
+        :param validation_file: 
+            The name of the file containing the validation data.
+            Default: None.
+
+        :returns: 
+            Nothing. Writes all of the models in the grid as pickled files in
+            ``output_dir`` along with a ``results.json``.
     """
 
     search_params = json.load(open(search_params_file, 'r'))

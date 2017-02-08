@@ -529,4 +529,52 @@ class UbergridUnitTest(TestCase):
                      target_col,
                      training_file,
                      output_dir,
-                     MULTICLASS_DIR + "/test.csv")
+                     validation_file = MULTICLASS_DIR + "/test.csv")
+
+        # Test that the _main function raises a ValueError when the 
+        # search_params_file doesn't exist.
+        with self.assertRaises(ValueError):
+            ug._main("not/a/file.json",
+                     target_col,
+                     training_file,
+                     output_dir,
+                     validation_file = validation_file)
+
+        # Test that the _main function raises a ValueError when the training
+        # file doesn't exist.
+        with self.assertRaises(ValueError):
+            ug._main(search_params_file,
+                     target_col,
+                     "not/a/file.csv",
+                     output_dir,
+                     validation_file = validation_file)
+
+        # Tests that the _main function raises a ValueError when the validation
+        # file doesn't exist.
+        with self.assertRaises(ValueError):
+            ug._main(search_params_file,
+                     target_col,
+                     training_file,
+                     output_dir,
+                     validation_file = "not/a/file.csv")
+
+        # Tests that the _main function raises a ValueError when the target col
+        # isn't in the training set.
+        with self.assertRaises(ValueError):
+            ug._main(search_params_file,
+                     "not_a_target",
+                     training_file,
+                     output_dir)
+
+        # Tests that the _main function raises a ValueError when the target col
+        # isn't in the validation set.
+        with self.assertRaises(ValueError):
+            training_data = read_csv(training_file)\
+                            .rename(columns={"target":"new_target"})\
+                            .to_csv(CLASSIFICATION_DIR + "/other_training.csv")
+
+            ug._main(search_params_file,
+                     "new_target",
+                     CLASSIFICATION_DIR + "/other_training.csv",
+                     output_dir,
+                     validation_file = validation_file)

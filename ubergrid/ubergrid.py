@@ -15,7 +15,6 @@ from sklearn.metrics import SCORERS
 from sklearn.base import BaseEstimator
 
 # TODO: Add logging.
-# TODO: Validate metric names.
 # TODO: Add cross validation.
 # TODO: Add joblib Parallel to support multiple simultaneous runs.
 # TODO: Refactor the arguments to _train_and_evaluate.
@@ -61,7 +60,7 @@ def _evaluate_model(estimator: BaseEstimator,
             Some of these metrics require additional data that isn't currently 
             available within the schema of ``search_params``. These are the 
             metrics which `are` available:
-            
+
             * ``"accuracy"``
             * ``"f1"``
             * ``"recall"``
@@ -397,24 +396,60 @@ def _main(search_params_file: str,
             The name of the file containing the validation data.
             Default: None.
 
+        :raises ValueError: If the ``search_params_file`` doesn't exist.
+
+        :raises ValueError: If the ``training_set_file`` doesn't exist.
+
+        :raises ValueError: If the ``validation_set_file`` doesn't exist.
+
+        :raises ValueError: If the ``target_col`` is not in the training set.
+
+        :raises ValueError: If the ``target_col`` is not in the validation set.
+
         :raises ValueError: 
             If the validation set is present and doesn't have the same columns 
             as the training set.
+
 
         :returns: 
             Nothing. Writes all of the models in the grid as pickled files in
             ``output_dir`` along with a ``results.json``.
     """
 
+    # Validate that the search parameter file exists.
+    if not os.path.exists(search_params_file):
+        raise ValueError(
+            "Search params file {} does not exist.".format(search_params_file))
+
+    # Validate that the training file exists.
+    if not os.path.exists(training_file):
+        raise ValueError(
+            "Training file {} does not exist.".format(training_file))
+    
+    # Validate that the validation file exists.
+    if validation_file and not os.path.exists(validation_file):
+        raise ValueError(
+            "Validation file {} does not exist.".format(validation_file))
+    
     search_params = json.load(open(search_params_file, 'r'))
 
     # The output directory could exist, especially if some of the results were
     # completed in a previous run.
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
-    
+
     training_set = read_csv(training_file)
     validation_set = read_csv(validation_file) if validation_file else None
+
+    # Validate that the training data contains the target column.
+    if target_col not in training_set.columns:
+        raise ValueError(
+            "Target column {} not in training data.".format(target_col))
+    
+    # Validate that the validation data contains the target column.
+    if validation_file and target_col not in validation_set.columns:
+        raise ValueError(
+            "Target column {} not in validation data.".format(target_col))
 
     if validation_file and \
         set(training_set.columns) != set(validation_set.columns):

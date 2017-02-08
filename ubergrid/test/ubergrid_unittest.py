@@ -516,3 +516,12 @@ class UbergridUnitTest(TestCase):
             # twice isn't the worst idea in the world.
             self.assertEqual(sorted(list(result.keys())),
                               sorted(result_keys_truth))
+
+        # Test that the _main function raises a ValueError when the validation
+        # set has different columns.
+        with self.assertRaises(ValueError):
+            ug._main(search_params_file,
+                     target_col,
+                     training_file,
+                     output_dir,
+                     MULTICLASS_DIR + "/test.csv")

@@ -14,13 +14,11 @@ from sklearn.model_selection import ParameterGrid
 from sklearn.metrics import SCORERS
 from sklearn.base import BaseEstimator
 
-
 # TODO: Add logging.
-# TODO: Validate that the training_set and validation_set frames have the same
-# columns.
 # TODO: Validate metric names.
 # TODO: Add cross validation.
 # TODO: Add joblib Parallel to support multiple simultaneous runs.
+# TODO: Refactor the arguments to _train_and_evaluate.
 
 def _evaluate_model(estimator: BaseEstimator, 
                     X: DataFrame, 
@@ -349,6 +347,10 @@ def _main(search_params_file: str,
             The name of the file containing the validation data.
             Default: None.
 
+        :raises ValueError: 
+            If the validation set is present and doesn't have the same columns 
+            as the training set.
+
         :returns: 
             Nothing. Writes all of the models in the grid as pickled files in
             ``output_dir`` along with a ``results.json``.
@@ -363,6 +365,11 @@ def _main(search_params_file: str,
     
     training_set = read_csv(training_file)
     validation_set = read_csv(validation_file) if validation_file else None
+
+    if validation_file and \
+        set(training_set.columns) != set(validation_set.columns):
+        raise ValueError("Validation set doesn't have the same columns as "
+            "the training set.")
 
     estimator = joblib.load(search_params['estimator'])
     grid = ParameterGrid(search_params['param_grid'])

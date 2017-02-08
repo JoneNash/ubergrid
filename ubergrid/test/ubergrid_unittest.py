@@ -204,6 +204,8 @@ class UbergridUnitTest(TestCase):
         param_file = open('classification/search_params.json','r')
         search_params = \
             json.load(param_file)
+        param_file.close()
+        
         metrics = search_params['scoring']
         prefix = "train"
 
@@ -228,7 +230,10 @@ class UbergridUnitTest(TestCase):
 
         self.assertEqual(sorted(list(results.keys())), 
                          sorted(result_keys_truth))
-        param_file.close()
+
+        # Validate that the ValueError is raised.
+        with self.assertRaises(ValueError):
+            ug._evaluate_model(estimator, X, y, metrics + ["nope"], prefix)
 
     def test_evaluate_model_multiclass(self):
         # Read in all the stuff we want.

@@ -20,6 +20,26 @@ from sklearn.base import BaseEstimator
 # TODO: Add joblib Parallel to support multiple simultaneous runs.
 # TODO: Refactor the arguments to _train_and_evaluate.
 
+AVAILABLE_METRICS = {
+    "accuracy",
+    "f1",
+    "recall",
+    "precision",
+    "log_loss",
+    "roc_auc",
+    "average_precision",
+    "f1_micro",
+    "f1_macro",
+    "precision_micro",
+    "precision_macro",
+    "recall_micro",
+    "recall_macro",
+    "neg_mean_absolute_error",
+    "neg_mean_squared_error",
+    "neg_median_absolute_error",
+    "r2"
+}
+
 def _evaluate_model(estimator: BaseEstimator, 
                     X: DataFrame, 
                     y: DataFrame, 
@@ -38,8 +58,32 @@ def _evaluate_model(estimator: BaseEstimator,
             A list of metric names to test. They must be metrics in
             scikit-learn's ``SCORERS`` dict 
             (see `sklearn.metrics <http://scikit-learn.org/stable/modules/model_evaluation.html#the-scoring-parameter-defining-model-evaluation-rules>`_).
+            Some of these metrics require additional data that isn't currently 
+            available within the schema of ``search_params``. These are the 
+            metrics which `are` available:
+            
+            * ``"accuracy"``
+            * ``"f1"``
+            * ``"recall"``
+            * ``"precision"``
+            * ``"log_loss"``
+            * ``"roc_auc"``
+            * ``"average_precision"``
+            * ``"f1_micro"``
+            * ``"f1_macro"``
+            * ``"precision_micro"``
+            * ``"precision_macro"``
+            * ``"recall_micro"``
+            * ``"recall_macro"``
+            * ``"neg_mean_absolute_error"``
+            * ``"neg_mean_squared_error"``
+            * ``"neg_median_absolute_error"``
+            * ``"r2"``
         
         :param prefix: A string to prefix the fields in the results dict with.
+
+        :raises ValueError:
+            If there's a metric that cannot be calculated from ``SCORERS``.
         
         :returns: 
             The results in a dictionary, with one field for each metric,
@@ -54,6 +98,12 @@ def _evaluate_model(estimator: BaseEstimator,
                 }
     """
 
+    # Validate that the metrics are in the available list.
+    if len(set(metrics) - AVAILABLE_METRICS) != 0:
+        raise ValueError(
+            "{} are not available metrics.".format(
+            set(metrics) - AVAILABLE_METRICS))
+    
     predict_times = []
     results = {}
 

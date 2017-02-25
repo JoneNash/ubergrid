@@ -1,6 +1,8 @@
 import json
 import sys
 import os
+import logging
+
 import numpy as np
 
 from time import time
@@ -14,9 +16,9 @@ from sklearn.model_selection import ParameterGrid
 from sklearn.metrics import SCORERS
 from sklearn.base import BaseEstimator
 
-# TODO: Add logging.
 # TODO: Add cross validation.
 # TODO: Add joblib Parallel to support multiple simultaneous runs.
+# TODO: Add dry run option.
 # TODO: Refactor the arguments to _train_and_evaluate.
 
 AVAILABLE_METRICS = {
@@ -38,6 +40,12 @@ AVAILABLE_METRICS = {
     "neg_median_absolute_error",
     "r2"
 }
+
+
+logging.basicConfig(format="%(asctime)s %(message)s", 
+                    datefmt="%Y-%m-%d %H:%M:%S",
+                    level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def _evaluate_model(estimator: BaseEstimator, 
                     X: DataFrame, 
@@ -99,6 +107,8 @@ def _evaluate_model(estimator: BaseEstimator,
 
     # Validate that the metrics are in the available list.
     if len(set(metrics) - AVAILABLE_METRICS) != 0:
+        logger.error("{} are not available metrics.".format(
+            " ".join(set(metrics) - AVAILABLE_METRICS)))
         raise ValueError(
             "{} are not available metrics.".format(
             set(metrics) - AVAILABLE_METRICS))
@@ -159,7 +169,7 @@ def _train_model(estimator: BaseEstimator,
                 {
                     "training_{metric}": value,
                     "training_{metric}": value,
-                    "training_prediction_time": time_for_predictions,
+                    "training_total_prediction_time": time_for_predictions,
                     "training_total_prediction_records": number_of_records,
                     "training_time_total": time_for_training
                 }
@@ -193,14 +203,14 @@ def _train_and_evaluate(estimator: BaseEstimator,
         results to disk.
     
         If there are already results in the provided output path,
-        this function skips calculations (for larger grids this allows jobs to be
-        resumed if they fail). This function is designed in this way so that it can
-        be executed in parallel. It writes two files: a joblib-pickled model (in
-        ``{output_dir}/model_{model_id}.pkl``), and
+        this function skips calculations (for larger grids this allows jobs to 
+        be resumed if they fail). This function is designed in this way so that 
+        it can be executed in parallel. It writes two files: a joblib-pickled 
+        model (in``{output_dir}/model_{model_id}.pkl``), and
         a results file that contains a single line JSON object 
         (``output_dir/results_{}.json``). That object contains
-        all of the performance and timing information related to the run. Here's an
-        example of that file::
+        all of the performance and timing information related to the run. 
+        Here's an example of that file::
 
             {
                 # Files used to build and evaluate the model.
@@ -218,15 +228,17 @@ def _train_and_evaluate(estimator: BaseEstimator,
 
                 # The metrics for training
                 "training_time_total": time_for_training,
-                "training_prediction_time": time_for_predictions,
+                "training_total_prediction_time": time_for_predictions,
                 "training_total_prediction_records": number_of_records,
                 "training_{metric}": value,
                 "training_{metric}": value,
                 # ...
 
                 # The metrics for validation, if validation was performed.
-                "validation_prediction_time": time_for_predictions_validation,
-                "validation_total_prediction_records": number_of_validation_records,
+                "validation_total_prediction_time": 
+                    time_for_predictions_validation,
+                "validation_total_prediction_records": 
+                    number_of_validation_records,
                 "validation_{metric}": value,
                 "validation_{metric}": value,
                 # ...
@@ -276,20 +288,34 @@ def _train_and_evaluate(estimator: BaseEstimator,
         
     # If the results file already exists, skip this pass.
     if os.path.exists(results_file):
+        logger.info("Model {} already exists, skipping.".format(model_id))
         return
 
     # Initialize the estimator with the params.
     estimator.set_params(**params)
 
+    logger.info(
+        "Training model {} and evaluating the model on the training set."\
+        .format(model_id))
     model, training_results = \
         _train_model(estimator, 
                      X_train, 
                      y_train, 
                      metrics, 
                      fit_params)
+    logger.info(
+        "Model {} trained in {} seconds.".format(
+            model_id, training_results["training_time_total"]))
+    logger.info(
+        "Model {} training set prediction time: {} for {} records.".format(
+            model_id, 
+            training_results["training_total_prediction_time"],
+            training_results["training_total_prediction_records"]))
+
 
     # If the validation set is defined, use _evaluate_model to evaluate the 
     # model. Otherwise this is an empty dict.
+    logger.info("Evaluating model {} on the validation set.".format(model_id))
     validation_results = \
         _evaluate_model(estimator, 
                         X_validation, 
@@ -297,6 +323,13 @@ def _train_and_evaluate(estimator: BaseEstimator,
                         metrics,
                         "validation") \
         if validation_file is not None else {}
+
+    if len(validation_results) > 0:
+        logger.info(
+            "Model {} validation set evaluation time: {} for {} records."\
+            .format(model_id, 
+                    validation_results["validation_total_prediction_time"],
+                    validation_results["validation_total_prediction_records"]))
     
     # Construct and write the results for this run.
     results = {
@@ -313,7 +346,11 @@ def _train_and_evaluate(estimator: BaseEstimator,
         results["validation_file"] = validation_file
 
     # Write the results _after_ the model.
+    logger.info("Writing estimator for model {} to {}."\
+                .format(model_id, model_file))
     joblib.dump(estimator, model_file)
+    logger.info("Writing results for model {} to {}."\
+                .format(model_id, results_file))
     with open(results_file, 'w') as results_out:
         results_out.write(
             json.dumps(results) + "\n")
@@ -416,18 +453,24 @@ def _main(search_params_file: str,
             ``output_dir`` along with a ``results.json``.
     """
 
+
     # Validate that the search parameter file exists.
     if not os.path.exists(search_params_file):
+        logger.critical("{} does not exist.".format(search_params_file))
         raise ValueError(
             "Search params file {} does not exist.".format(search_params_file))
 
     # Validate that the training file exists.
     if not os.path.exists(training_file):
+        logger.critical(
+            "Training file {} does not exist.".format(training_file))
         raise ValueError(
             "Training file {} does not exist.".format(training_file))
     
     # Validate that the validation file exists.
     if validation_file and not os.path.exists(validation_file):
+        logger.critical(
+            "Validation file {} does not exist.".format(validation_file))
         raise ValueError(
             "Validation file {} does not exist.".format(validation_file))
     
@@ -436,6 +479,7 @@ def _main(search_params_file: str,
     # The output directory could exist, especially if some of the results were
     # completed in a previous run.
     if not os.path.exists(output_dir):
+        logger.info("{} does not exist. Creating {}.".format(output_dir))
         os.mkdir(output_dir)
 
     training_set = read_csv(training_file)
@@ -443,16 +487,23 @@ def _main(search_params_file: str,
 
     # Validate that the training data contains the target column.
     if target_col not in training_set.columns:
+        logger.critical(
+            "Target column {} is not in the training data.".format(target_col))
         raise ValueError(
             "Target column {} not in training data.".format(target_col))
     
     # Validate that the validation data contains the target column.
     if validation_file and target_col not in validation_set.columns:
+        logger.critical(
+            "Target column {} is not in the validation data."\
+            .format(target_col))
         raise ValueError(
             "Target column {} not in validation data.".format(target_col))
 
     if validation_file and \
         set(training_set.columns) != set(validation_set.columns):
+        logger.critical(
+            "Validation set doesn't have the same columns as the training set.")
         raise ValueError("Validation set doesn't have the same columns as "
             "the training set.")
 
@@ -476,6 +527,11 @@ def _main(search_params_file: str,
     # possibly. It will be bad if there's stuff from a different run (meaning
     # a run for a different estimator / parameter grid).
     for model_id, params in enumerate(grid):
+       param_str = ", ".join(
+           ["{}={}".format(param_name, param_value)
+            for param_name, param_value in params.items()])
+       logger.info("Training and evaluating model {}: {}"\
+                   .format(model_id, param_str))
        _train_and_evaluate(estimator,
                            params,
                            model_id,
@@ -491,8 +547,10 @@ def _main(search_params_file: str,
                            validation_file=validation_file)
  
     # Unify all of the results files into one.
+    logger.info("Consolidating results.")
     os.system(
         "cat {output_dir}/results_*.json > ".format(output_dir=output_dir) +
         "{output_dir}/results.json".format(output_dir=output_dir))
     # Remove the intermediate results files.
+    logger.info("Deleting intermediate results.")
     os.system("rm {output_dir}/results_*.json".format(output_dir=output_dir))

@@ -12,11 +12,11 @@ from pandas import DataFrame, Series, read_csv
 from typing import List, Tuple, Dict, Any
 
 from sklearn.externals import joblib
-from sklearn.model_selection import ParameterGrid
+from sklearn.model_selection import ParameterGrid, KFold
 from sklearn.metrics import SCORERS
 from sklearn.base import BaseEstimator
+from toolz import merge_with, identity, keymap, valmap
 
-# TODO: Add cross validation.
 # TODO: Add joblib Parallel to support multiple simultaneous runs.
 # TODO: Add dry run option.
 # TODO: Refactor the arguments to _train_and_evaluate.
@@ -107,7 +107,7 @@ def _evaluate_model(estimator: BaseEstimator,
 
     # Validate that the metrics are in the available list.
     if len(set(metrics) - AVAILABLE_METRICS) != 0:
-        logger.error("{} are not available metrics.".format(
+        logger.critical("{} are not available metrics.".format(
             " ".join(set(metrics) - AVAILABLE_METRICS)))
         raise ValueError(
             "{} are not available metrics.".format(
@@ -198,7 +198,8 @@ def _train_and_evaluate(estimator: BaseEstimator,
                         fit_params:Dict[str, Any],
                         X_validation: DataFrame = None,
                         y_validation: DataFrame = None,
-                        validation_file: str = None) -> None:
+                        validation_file: str = None,
+                        cross_validation: int = None) -> None:
     """ Performs training and evaluation on a scikit-learn estimator, saving the
         results to disk.
     
@@ -232,6 +233,24 @@ def _train_and_evaluate(estimator: BaseEstimator,
                 "training_total_prediction_records": number_of_records,
                 "training_{metric}": value,
                 "training_{metric}": value,
+                # ...
+
+                # The metrics for cross validation, if cross validation was
+                # performed.
+                "cross_validation_training_time_total_all": list_of_times,
+                "cross_validation_training_time_total_mean": mean_training_time,
+                "cross_validation_total_prediction_time_all":
+                    list_of_prediction_times,
+                "cross_validation_total_prediction_time_mean":
+                    mean_total_prediction_time,
+                "cross_validation_total_prediction_records_all":
+                    list_of_numbers_of_records,
+                "cross_validation_total_prediction_records_mean":
+                    mean_number_of_records,
+                "cross_validation_{metric}_all": list_of_metric_values,
+                "cross_validation_{metric}_mean": mean_metric_value,
+                "cross_validation_{metric}_all": list_of_metric_values,
+                "cross_validation_{metric}_mean": mean_metric_value,
                 # ...
 
                 # The metrics for validation, if validation was performed.
@@ -280,6 +299,10 @@ def _train_and_evaluate(estimator: BaseEstimator,
             The name of the file with the validation data.
             Default: None.
 
+        :param cross_validation:
+            The number of cross validation folds to perform.
+            Default: None.
+
         :returns: Nothing, writes to the files described above.
         
     """
@@ -294,6 +317,80 @@ def _train_and_evaluate(estimator: BaseEstimator,
     # Initialize the estimator with the params.
     estimator.set_params(**params)
 
+    cv_results = {}
+    # Perform cross validation if selected.
+    if cross_validation is not None:
+        logger.info("Cross validating model {} for {} folds.".format(
+            model_id, cross_validation))
+
+        cross_validation_results = []
+        k_folds = KFold(n_splits=cross_validation)
+        for cv_train, cv_test in k_folds.split(X_train):
+            
+            logger.info("Training model {} on cross validation training set."\
+                .format(model_id))
+            cv_train_start = time()
+            estimator.fit(X_train.iloc[cv_train],
+                          y_train.iloc[cv_train],
+                          **fit_params)
+            cv_train_stop = time()
+            logger.info(
+                "Completed training model {} on cross validation "\
+                .format(model_id) + 
+                "training set. Took {} seconds."\
+                    .format(cv_train_stop - cv_train_start))
+            
+            logger.info("Evaluating model {} on cross validation training set."\
+                .format(model_id))
+            cv_training_results = \
+                _evaluate_model(
+                    estimator,
+                    X_train.iloc[cv_train],
+                    y_train.iloc[cv_train],
+                    metrics,
+                    "cross_validation_training")
+            logger.info("Completed evaluating model {} on cross validation "\
+                .format(model_id) +
+                "training set. Took {} seconds for {} records.".format(
+                    cv_training_results[
+                        "cross_validation_training_total_prediction_time"],
+                    cv_training_results[
+                        "cross_validation_training_total_prediction_records"]))
+            
+            logger.info("Evaluating model {} on cross validation test set."\
+                .format(model_id))
+            cv_validation_results = \
+                _evaluate_model(
+                    estimator,
+                    X_train.iloc[cv_test],
+                    y_train.iloc[cv_test],
+                    metrics,
+                    "cross_validation")
+            logger.info("Completed evaluating model {} on cross validation "\
+                .format(model_id) +
+                "test set. Took {} seconds for {} records.".format(
+                    cv_validation_results[
+                        "cross_validation_total_prediction_time"],
+                    cv_validation_results[
+                        "cross_validation_total_prediction_records"]))
+            
+            cross_validation_results.append(
+                {   
+                    "cross_validation_training_time_total": 
+                        cv_train_stop - cv_train_start,
+                    **cv_training_results,
+                    **cv_validation_results
+                })
+        # Merge the results.
+        cv_results_merged = merge_with(identity, *cross_validation_results)
+        cv_results = {
+            # These are the results for the individual folds.
+            **(keymap(lambda x: x + "_all", cv_results_merged)),
+            # These are the average results.
+            **(valmap(lambda x: sum(x) / len(x), cv_results_merged))
+        }
+        logger.info("Cross validation for model {} completed.".format(model_id))
+    
     logger.info(
         "Training model {} and evaluating the model on the training set."\
         .format(model_id))
@@ -312,10 +409,11 @@ def _train_and_evaluate(estimator: BaseEstimator,
             training_results["training_total_prediction_time"],
             training_results["training_total_prediction_records"]))
 
-
     # If the validation set is defined, use _evaluate_model to evaluate the 
     # model. Otherwise this is an empty dict.
-    logger.info("Evaluating model {} on the validation set.".format(model_id))
+    if validation_file is not None:
+        logger.info(
+            "Evaluating model {} on the validation set.".format(model_id))
     validation_results = \
         _evaluate_model(estimator, 
                         X_validation, 
@@ -336,6 +434,7 @@ def _train_and_evaluate(estimator: BaseEstimator,
         "training_file": training_file,
         "target": target_col,
         "model_file": model_file,
+        **cv_results,
         **training_results,
         **validation_results,
         **params
@@ -359,7 +458,8 @@ def _main(search_params_file: str,
           target_col: str,
           training_file: str,
           output_dir: str,
-          validation_file: str = None) -> None:
+          validation_file: str = None,
+          cross_validation: int = None) -> None:
     """ Executes an entire parameter grid, saving all results and models to disk.
 
         This method runs the ``_train_and_evaluate`` function on each combination
@@ -392,6 +492,24 @@ def _main(search_params_file: str,
                 "training_total_prediction_records": number_of_records,
                 "training_{metric}": value,
                 "training_{metric}": value,
+                # ...
+
+                # The metrics for cross validation, if cross validation was
+                # performed.
+                "cross_validation_training_time_total_all": list_of_times,
+                "cross_validation_training_time_total_mean": mean_training_time,
+                "cross_validation_total_prediction_time_all":
+                    list_of_prediction_times,
+                "cross_validation_total_prediction_time_mean":
+                    mean_total_prediction_time,
+                "cross_validation_total_prediction_records_all":
+                    list_of_numbers_of_records,
+                "cross_validation_total_prediction_records_mean":
+                    mean_number_of_records,
+                "cross_validation_{metric}_all": list_of_metric_values,
+                "cross_validation_{metric}_mean": mean_metric_value,
+                "cross_validation_{metric}_all": list_of_metric_values,
+                "cross_validation_{metric}_mean": mean_metric_value,
                 # ...
 
                 # The metrics for validation, if validation was performed.
@@ -544,7 +662,8 @@ def _main(search_params_file: str,
                            fit_params,
                            X_validation=X_validation,
                            y_validation=y_validation,
-                           validation_file=validation_file)
+                           validation_file=validation_file,
+                           cross_validation=cross_validation)
  
     # Unify all of the results files into one.
     logger.info("Consolidating results.")

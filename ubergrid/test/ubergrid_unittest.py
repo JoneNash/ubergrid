@@ -3,6 +3,7 @@ import subprocess
 import json
 
 from unittest import TestCase
+from pprint import pprint
 
 import numpy as np
 from pandas import DataFrame, read_csv
@@ -381,7 +382,8 @@ class UbergridUnitTest(TestCase):
             fit_params,
             X_validation = X_validation,
             y_validation = y_validation,
-            validation_file = validation_file)
+            validation_file = validation_file,
+            cross_validation = 3)
 
         result_keys_truth = [
            "training_accuracy",
@@ -391,18 +393,68 @@ class UbergridUnitTest(TestCase):
            "training_log_loss",
            "training_roc_auc",
            "training_average_precision",
+           
            "training_total_prediction_time",
            "training_total_prediction_records",
            "training_time_total",
+           
            "validation_accuracy",
            "validation_f1",
            "validation_precision",
            "validation_recall",
            "validation_log_loss",
            "validation_roc_auc",
+           
            "validation_average_precision",
            "validation_total_prediction_time",
            "validation_total_prediction_records",
+           
+           "cross_validation_accuracy",
+           "cross_validation_f1",
+           "cross_validation_precision",
+           "cross_validation_recall",
+           "cross_validation_log_loss",
+           "cross_validation_roc_auc",
+           "cross_validation_average_precision",
+           
+           "cross_validation_total_prediction_time",
+           "cross_validation_total_prediction_records",
+           
+           "cross_validation_accuracy_all",
+           "cross_validation_f1_all",
+           "cross_validation_precision_all",
+           "cross_validation_recall_all",
+           "cross_validation_log_loss_all",
+           "cross_validation_roc_auc_all",
+           "cross_validation_average_precision_all",
+           
+           "cross_validation_total_prediction_time_all",
+           "cross_validation_total_prediction_records_all",
+           
+           "cross_validation_training_accuracy",
+           "cross_validation_training_f1",
+           "cross_validation_training_precision",
+           "cross_validation_training_recall",
+           "cross_validation_training_log_loss",
+           "cross_validation_training_roc_auc",
+           "cross_validation_training_average_precision",
+           
+           "cross_validation_training_total_prediction_time",
+           "cross_validation_training_total_prediction_records",
+           "cross_validation_training_time_total",
+           
+           "cross_validation_training_accuracy_all",
+           "cross_validation_training_f1_all",
+           "cross_validation_training_precision_all",
+           "cross_validation_training_recall_all",
+           "cross_validation_training_log_loss_all",
+           "cross_validation_training_roc_auc_all",
+           "cross_validation_training_average_precision_all",
+           
+           "cross_validation_training_total_prediction_time_all",
+           "cross_validation_training_total_prediction_records_all",
+           "cross_validation_training_time_total_all",
+           
            "training_file",
            "target",
            "model_file",

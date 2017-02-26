@@ -20,6 +20,7 @@ from toolz import merge_with, identity, keymap, valmap
 
 # TODO: Add dry run option.
 # TODO: Refactor the arguments to _train_and_evaluate.
+# TODO: Refactor the cross validation into its own method.
 # TODO: Add PMML generation.
 # TODO: Add PMML timing.
 

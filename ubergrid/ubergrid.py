@@ -18,7 +18,6 @@ from sklearn.metrics import SCORERS
 from sklearn.base import BaseEstimator
 from toolz import merge_with, identity, keymap, valmap
 
-# TODO: Add dry run option.
 # TODO: Refactor the arguments to _train_and_evaluate.
 # TODO: Refactor the cross validation into its own method.
 # TODO: Add PMML generation.
@@ -463,13 +462,55 @@ def _train_and_evaluate(estimator: BaseEstimator,
         results_out.write(
             json.dumps(results) + "\n")
 
+def _dry_run(grid: ParameterGrid,
+             output_dir: str,
+             scoring: List[str],
+             fit_params: Dict[str, Any],
+             validation_file: str,
+             cross_validation: int):
+    """ Logs the actions that will execute in the grid search without actually
+        executing them.
+
+        :param grid: A scikit-learn ParameterGrid object.
+        
+        :param output_dir: The name of the output directory for the models.
+
+        :param fit_params: The parameters to send to the model's ``fit`` method.
+
+        :param validation_file: 
+            The name of the file with the validation data (if present).
+        
+        :param cross_validation:
+            The number of cross validation folds (if present).
+    """
+    logger.info("Dry run: output_dir = {}".format(output_dir))
+    logger.info("Dry run: Models trained with fit params {}.".format(
+        ", ".join(["{}={}".format(fit_param_name, fit_param_value)
+         for fit_param_name, fit_param_value in fit_params.items()])))
+    logger.info("Dry run: Models evaluated with metrics {}.".format(
+        ", ".join(scoring)))
+    if cross_validation:
+        logger.info("Dry run: Models cross validated with {} folds."\
+            .format(cross_validation))
+    if validation_file:
+        logger.info("Dry run: Models validated on {}.".format(
+            validation_file))
+    for model_id, params in enumerate(grid):
+        param_str = ", ".join(
+           ["{}={}".format(param_name, param_value)
+            for param_name, param_value in params.items()])
+        logger.info("Dry run: Model {} trained and evaluated with {}.".format(
+            model_id, param_str))
+
+
 def _main(search_params_file: str,
           target_col: str,
           training_file: str,
           output_dir: str,
           validation_file: str = None,
           cross_validation: int = None,
-          n_jobs: int = 1) -> None:
+          n_jobs: int = 1,
+          dry_run: bool = False) -> None:
     """ Executes an entire parameter grid, saving all results and models to disk.
 
         This method runs the ``_train_and_evaluate`` function on each combination
@@ -569,6 +610,11 @@ def _main(search_params_file: str,
             The number of parallel jobs to execute the grid for.
             Default: 1.
 
+        :param dry_run:
+            Whether to execute a "dry run", which prints out the steps
+            that will be executed.
+            Default: False
+
         :raises ValueError: If the ``search_params_file`` doesn't exist.
 
         :raises ValueError: If the ``training_set_file`` doesn't exist.
@@ -588,7 +634,6 @@ def _main(search_params_file: str,
             Nothing. Writes all of the models in the grid as pickled files in
             ``output_dir`` along with a ``results.json``.
     """
-
 
     # Validate that the search parameter file exists.
     if not os.path.exists(search_params_file):
@@ -656,6 +701,16 @@ def _main(search_params_file: str,
     # Initialize the validation stuff only if there's a validation set present.
     X_validation = validation_set[feature_cols] if validation_file else None
     y_validation = validation_set[[target_col]] if validation_file else None
+
+    if dry_run:
+        _dry_run(grid, 
+                 output_dir, 
+                 search_params['scoring'], 
+                 fit_params, 
+                 validation_file, 
+                 cross_validation)
+        # Exit the program.
+        return
     
     # This is an extremely sophisticated model ID scheme. Do note that things
     # will be overwritten if there's already stuff in the output directory, 

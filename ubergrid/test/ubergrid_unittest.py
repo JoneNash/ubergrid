@@ -505,6 +505,18 @@ class UbergridUnitTest(TestCase):
         output_dir = TEST_OUTPUT_DIR
         validation_file = CLASSIFICATION_DIR + "/test.csv"
 
+        # Test that the _main function completes properly when called with
+        # dry-run.
+        ug._main(search_params_file,
+                 target_col,
+                 training_file,
+                 output_dir,
+                 validation_file = validation_file,
+                 cross_validation = 3,
+                 dry_run = True)
+        # We need to assert that no files were created.
+        self.assertEqual([], os.listdir(output_dir))
+
         ug._main(search_params_file,
                  target_col,
                  training_file,
@@ -574,6 +586,8 @@ class UbergridUnitTest(TestCase):
             self.assertEqual(sorted(list(result.keys())),
                               sorted(result_keys_truth))
 
+
+        
         # Test that the _main function raises a ValueError when the validation
         # set has different columns.
         with self.assertRaises(ValueError):

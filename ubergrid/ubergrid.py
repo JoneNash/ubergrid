@@ -12,6 +12,7 @@ from pandas import DataFrame, Series, read_csv
 from typing import List, Tuple, Dict, Any
 
 from sklearn.externals import joblib
+from sklearn.externals.joblib import Parallel, delayed
 from sklearn.model_selection import ParameterGrid, KFold
 from sklearn.metrics import SCORERS
 from sklearn.base import BaseEstimator
@@ -20,6 +21,8 @@ from toolz import merge_with, identity, keymap, valmap
 # TODO: Add joblib Parallel to support multiple simultaneous runs.
 # TODO: Add dry run option.
 # TODO: Refactor the arguments to _train_and_evaluate.
+# TODO: Add PMML generation.
+# TODO: Add PMML timing.
 
 AVAILABLE_METRICS = {
     "accuracy",
@@ -306,6 +309,12 @@ def _train_and_evaluate(estimator: BaseEstimator,
         :returns: Nothing, writes to the files described above.
         
     """
+    param_str = ", ".join(
+           ["{}={}".format(param_name, param_value)
+            for param_name, param_value in params.items()])
+    logger.info("Training and evaluating model {}: {}"\
+                .format(model_id, param_str))
+    
     model_file = "{}/model_{}.pkl".format(output_dir, model_id)
     results_file = "{}/results_{}.json".format(output_dir, model_id)
         
@@ -459,7 +468,8 @@ def _main(search_params_file: str,
           training_file: str,
           output_dir: str,
           validation_file: str = None,
-          cross_validation: int = None) -> None:
+          cross_validation: int = None,
+          n_jobs: int = 1) -> None:
     """ Executes an entire parameter grid, saving all results and models to disk.
 
         This method runs the ``_train_and_evaluate`` function on each combination
@@ -551,6 +561,14 @@ def _main(search_params_file: str,
             The name of the file containing the validation data.
             Default: None.
 
+        :param cross_validation:
+            The number of K-Fold cross validations to perform.
+            Default: None.
+
+        :param n_jobs: 
+            The number of parallel jobs to execute the grid for.
+            Default: 1.
+
         :raises ValueError: If the ``search_params_file`` doesn't exist.
 
         :raises ValueError: If the ``training_set_file`` doesn't exist.
@@ -625,7 +643,6 @@ def _main(search_params_file: str,
         raise ValueError("Validation set doesn't have the same columns as "
             "the training set.")
 
-    estimator = joblib.load(search_params['estimator'])
     grid = ParameterGrid(search_params['param_grid'])
     fit_params = search_params['fit_params'] \
                  if 'fit_params' in search_params.keys() else {}
@@ -639,32 +656,29 @@ def _main(search_params_file: str,
     # Initialize the validation stuff only if there's a validation set present.
     X_validation = validation_set[feature_cols] if validation_file else None
     y_validation = validation_set[[target_col]] if validation_file else None
-
+    
     # This is an extremely sophisticated model ID scheme. Do note that things
     # will be overwritten if there's already stuff in the output directory, 
     # possibly. It will be bad if there's stuff from a different run (meaning
     # a run for a different estimator / parameter grid).
-    for model_id, params in enumerate(grid):
-       param_str = ", ".join(
-           ["{}={}".format(param_name, param_value)
-            for param_name, param_value in params.items()])
-       logger.info("Training and evaluating model {}: {}"\
-                   .format(model_id, param_str))
-       _train_and_evaluate(estimator,
-                           params,
-                           model_id,
-                           training_file,
-                           output_dir,
-                           X_train,
-                           y_train,
-                           target_col,
-                           search_params['scoring'],
-                           fit_params,
-                           X_validation=X_validation,
-                           y_validation=y_validation,
-                           validation_file=validation_file,
-                           cross_validation=cross_validation)
- 
+    Parallel(n_jobs=n_jobs)(delayed(_train_and_evaluate)\
+        # All the args to _train_and_evaluate.
+        (joblib.load(search_params['estimator']),
+         params,
+         ii,
+         training_file,
+         output_dir,
+         X_train,
+         y_train,
+         target_col,
+         search_params['scoring'],
+         fit_params,
+         X_validation=X_validation,
+         y_validation=y_validation,
+         validation_file=validation_file,
+         cross_validation=cross_validation)
+        for ii, params in enumerate(grid))
+
     # Unify all of the results files into one.
     logger.info("Consolidating results.")
     os.system(

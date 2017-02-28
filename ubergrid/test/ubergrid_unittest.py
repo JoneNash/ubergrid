@@ -338,6 +338,91 @@ class UbergridUnitTest(TestCase):
                          sorted(result_keys_truth))
         
         search_param_file.close()
+    
+    def test_cross_validate(self):
+        # TODO: Implement.
+        # Read the stuff we need.
+        estimator = joblib.load('classification/classifier.pkl')
+
+        search_param_file = open('classification/search_params.json', 'r')
+        search_params = json.load(search_param_file)
+        search_param_file.close()
+        params = ParameterGrid(search_params['param_grid'])[0]
+
+        estimator.set_params(**params)
+
+        model_id = 0
+
+        training_file = 'classification/train.csv'
+        training_data = read_csv(training_file)
+        X_train = \
+            training_data[[c for c in training_data.columns if c != 'target']]
+        y_train = training_data[['target']]
+
+        metrics = search_params['scoring']
+        fit_params = search_params['fit_params']
+        n_splits = 3
+
+        results = ug._cross_validate(
+            estimator,
+            model_id,
+            X_train,
+            y_train,
+            metrics,
+            fit_params,
+            n_splits)
+
+        result_keys_truth = [
+            "cross_validation_accuracy",
+            "cross_validation_f1",
+            "cross_validation_precision",
+            "cross_validation_recall",
+            "cross_validation_log_loss",
+            "cross_validation_roc_auc",
+            "cross_validation_average_precision",
+           
+            "cross_validation_total_prediction_time",
+            "cross_validation_total_prediction_records",
+           
+            "cross_validation_accuracy_all",
+            "cross_validation_f1_all",
+            "cross_validation_precision_all",
+            "cross_validation_recall_all",
+            "cross_validation_log_loss_all",
+            "cross_validation_roc_auc_all",
+            "cross_validation_average_precision_all",
+           
+            "cross_validation_total_prediction_time_all",
+            "cross_validation_total_prediction_records_all",
+           
+            "cross_validation_training_accuracy",
+            "cross_validation_training_f1",
+            "cross_validation_training_precision",
+            "cross_validation_training_recall",
+            "cross_validation_training_log_loss",
+            "cross_validation_training_roc_auc",
+            "cross_validation_training_average_precision",
+           
+            "cross_validation_training_total_prediction_time",
+            "cross_validation_training_total_prediction_records",
+            "cross_validation_training_time_total",
+           
+            "cross_validation_training_accuracy_all",
+            "cross_validation_training_f1_all",
+            "cross_validation_training_precision_all",
+            "cross_validation_training_recall_all",
+            "cross_validation_training_log_loss_all",
+            "cross_validation_training_roc_auc_all",
+            "cross_validation_training_average_precision_all",
+           
+            "cross_validation_training_total_prediction_time_all",
+            "cross_validation_training_total_prediction_records_all",
+            "cross_validation_training_time_total_all"
+        ]
+
+        self.assertEqual(
+            sorted(list(results.keys())),
+            sorted(result_keys_truth))
 
     def test_train_and_evaluate(self):
         # Read the stuff we need.

@@ -19,7 +19,6 @@ from sklearn.base import BaseEstimator
 from toolz import merge_with, identity, keymap, valmap
 
 # TODO: Refactor the arguments to _train_and_evaluate.
-# TODO: Refactor the cross validation into its own method.
 # TODO: Add PMML generation.
 # TODO: Add PMML timing.
 
@@ -185,6 +184,149 @@ def _train_model(estimator: BaseEstimator,
 
     return estimator, results
 
+def _cross_validate(estimator: BaseEstimator,
+                    model_id: int,
+                    X_train: DataFrame,
+                    y_train: DataFrame,
+                    metrics: List[str],
+                    fit_params: Dict[str, Any],
+                    n_splits: int) -> Dict[str, Any]:
+    """ Performs K-Fold cross validation on the estimator for a given training
+        set.
+
+        :param estimator: The estimator to be cross validated.
+
+        :param model_id: The model identifier.
+
+        :param X_train: The training data in a DataFrame.
+
+        :param y_train: The training data ground truth values in a DataFrame.
+
+        :param metrics: A list of scores to evaluate.
+
+        :param fit_params: 
+            A dict of parameters to pass to the estimators ``fit`` method.
+
+        :param n_splits: The number of splits in the validation.
+
+        :returns:
+            A dict containing evaluation metrics for the cross validation. There
+            are two sets of metrics: one set of lists that contain values for
+            each validation split, and another that contains the means of the
+            values for all of the splits. Metric fields are named 
+            ``cross_validation_{metric}_all`` for the lists and 
+            ``cross_validation_{metric}`` for the means. These are also repeated
+            for the training cycles, prefixed with 
+            ``cross_validation_training_...``. The dict also contains
+            information about the timing of the training and evaluation of the
+            model on the splits. Here's an example::
+
+                {
+                    # Training set values.
+                    "cross_validation_training_{metric}_all": 
+                        list_of_training_set_metric_values,
+                    "cross_validation_training_{metric}":
+                        mean_of_training_set_metric_list,
+                    # ... for each metric.
+                    
+                    "cross_validation_training_total_prediction_time_all":
+                        list_of_training_set_prediction_times,
+                    "cross_validation_training_total_prediction_time":
+                        mean_of_training_set_prediction_time_list,
+                    "cross_validation_training_total_prediction_records_all":
+                        list_of_training_record_counts,
+                    "cross_validation_training_total_prediction_records":
+                        mean_of_training_record_count_list,
+                    "cross_validation_training_time_total_all":
+                        list_of_training_times,
+                    "cross_validation_training_time_total_mean":
+                        mean_of_training_time_list,
+
+                    # Test set values.
+                    "cross_validation_{metric}_all": list_of_metric_values,
+                    "cross_validation_{metric}": mean_of_metric_list,
+                    # ... for each metric.
+                    
+                    "cross_validation_total_prediction_time_all":
+                        list_of_prediction_times,
+                    "cross_validation_total_prediction_time":
+                        mean_of_prediction_time_list,
+                    "cross_validation_total_prediction_records_all":
+                        list_of_prediction_record_counts,
+                    "cross_validation_total_prediction_records":
+                        mean_of_prediction_record_count_list
+                }
+    """
+    cross_validation_results = []
+    k_folds = KFold(n_splits=n_splits)
+    for cv_train, cv_test in k_folds.split(X_train):
+            
+        logger.info("Training model {} on cross validation training set."\
+            .format(model_id))
+        cv_train_start = time()
+        estimator.fit(X_train.iloc[cv_train],
+                      y_train.iloc[cv_train],
+                      **fit_params)
+        cv_train_stop = time()
+        logger.info(
+            "Completed training model {} on cross validation "\
+            .format(model_id) + 
+            "training set. Took {} seconds."\
+                .format(cv_train_stop - cv_train_start))
+        
+        logger.info("Evaluating model {} on cross validation training set."\
+            .format(model_id))
+        cv_training_results = \
+            _evaluate_model(
+                estimator,
+                X_train.iloc[cv_train],
+                y_train.iloc[cv_train],
+                metrics,
+                "cross_validation_training")
+        logger.info("Completed evaluating model {} on cross validation "\
+            .format(model_id) +
+            "training set. Took {} seconds for {} records.".format(
+                cv_training_results[
+                    "cross_validation_training_total_prediction_time"],
+                cv_training_results[
+                    "cross_validation_training_total_prediction_records"]))
+            
+        logger.info("Evaluating model {} on cross validation test set."\
+            .format(model_id))
+        cv_validation_results = \
+            _evaluate_model(
+                estimator,
+                X_train.iloc[cv_test],
+                y_train.iloc[cv_test],
+                metrics,
+                "cross_validation")
+        logger.info("Completed evaluating model {} on cross validation "\
+            .format(model_id) +
+            "test set. Took {} seconds for {} records.".format(
+                cv_validation_results[
+                    "cross_validation_total_prediction_time"],
+                cv_validation_results[
+                    "cross_validation_total_prediction_records"]))
+            
+        cross_validation_results.append(
+            {   
+                "cross_validation_training_time_total": 
+                    cv_train_stop - cv_train_start,
+                **cv_training_results,
+                **cv_validation_results
+            })
+
+    # Merge the results.
+    cv_results_merged = merge_with(identity, *cross_validation_results)
+    cv_results = {
+        # These are the results for the individual folds.
+        **(keymap(lambda x: x + "_all", cv_results_merged)),
+        # These are the average results.
+        **(valmap(lambda x: sum(x) / len(x), cv_results_merged))
+    }
+    logger.info("Cross validation for model {} completed.".format(model_id))
+    return cv_results
+
 # TODO: This _train_and_evaluate function is kind of a mess. It's not a huge
 # deal since it's internal to the system only, but it might be worth a refactor
 # at some point.
@@ -331,78 +473,19 @@ def _train_and_evaluate(estimator: BaseEstimator,
         logger.info("Cross validating model {} for {} folds.".format(
             model_id, cross_validation))
 
-        cross_validation_results = []
-        k_folds = KFold(n_splits=cross_validation)
-        for cv_train, cv_test in k_folds.split(X_train):
-            
-            logger.info("Training model {} on cross validation training set."\
-                .format(model_id))
-            cv_train_start = time()
-            estimator.fit(X_train.iloc[cv_train],
-                          y_train.iloc[cv_train],
-                          **fit_params)
-            cv_train_stop = time()
-            logger.info(
-                "Completed training model {} on cross validation "\
-                .format(model_id) + 
-                "training set. Took {} seconds."\
-                    .format(cv_train_stop - cv_train_start))
-            
-            logger.info("Evaluating model {} on cross validation training set."\
-                .format(model_id))
-            cv_training_results = \
-                _evaluate_model(
-                    estimator,
-                    X_train.iloc[cv_train],
-                    y_train.iloc[cv_train],
-                    metrics,
-                    "cross_validation_training")
-            logger.info("Completed evaluating model {} on cross validation "\
-                .format(model_id) +
-                "training set. Took {} seconds for {} records.".format(
-                    cv_training_results[
-                        "cross_validation_training_total_prediction_time"],
-                    cv_training_results[
-                        "cross_validation_training_total_prediction_records"]))
-            
-            logger.info("Evaluating model {} on cross validation test set."\
-                .format(model_id))
-            cv_validation_results = \
-                _evaluate_model(
-                    estimator,
-                    X_train.iloc[cv_test],
-                    y_train.iloc[cv_test],
-                    metrics,
-                    "cross_validation")
-            logger.info("Completed evaluating model {} on cross validation "\
-                .format(model_id) +
-                "test set. Took {} seconds for {} records.".format(
-                    cv_validation_results[
-                        "cross_validation_total_prediction_time"],
-                    cv_validation_results[
-                        "cross_validation_total_prediction_records"]))
-            
-            cross_validation_results.append(
-                {   
-                    "cross_validation_training_time_total": 
-                        cv_train_stop - cv_train_start,
-                    **cv_training_results,
-                    **cv_validation_results
-                })
-        # Merge the results.
-        cv_results_merged = merge_with(identity, *cross_validation_results)
-        cv_results = {
-            # These are the results for the individual folds.
-            **(keymap(lambda x: x + "_all", cv_results_merged)),
-            # These are the average results.
-            **(valmap(lambda x: sum(x) / len(x), cv_results_merged))
-        }
-        logger.info("Cross validation for model {} completed.".format(model_id))
-    
+        cv_results = \
+            _cross_validate(estimator,
+                            model_id,
+                            X_train,
+                            y_train,
+                            metrics,
+                            fit_params,
+                            cross_validation)
+       
     logger.info(
         "Training model {} and evaluating the model on the training set."\
         .format(model_id))
-    model, training_results = \
+    estimator, training_results = \
         _train_model(estimator, 
                      X_train, 
                      y_train, 

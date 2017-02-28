@@ -11,12 +11,13 @@ from pandas import DataFrame, Series, read_csv
 
 from typing import List, Tuple, Dict, Any
 
+from toolz import merge_with, identity, keymap, valmap
+
 from sklearn.externals import joblib
 from sklearn.externals.joblib import Parallel, delayed
 from sklearn.model_selection import ParameterGrid, KFold
 from sklearn.metrics import SCORERS
 from sklearn.base import BaseEstimator
-from toolz import merge_with, identity, keymap, valmap
 
 # TODO: Refactor the arguments to _train_and_evaluate.
 # TODO: Add PMML generation.

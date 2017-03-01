@@ -207,13 +207,16 @@ class UbergridUnitTest(TestCase):
             json.load(param_file)
         param_file.close()
         
-        metrics = search_params['scoring']
+        grid_search_context = {
+            'metrics': search_params['scoring']
+        }
         prefix = "train"
 
         # Fit the estimator in preparation for evaluation.
         estimator.fit(X,y)
         
-        results = ug._evaluate_model(estimator, X, y, metrics, prefix)
+        results = \
+            ug._evaluate_model(estimator, X, y, grid_search_context, prefix)
         
         # Values will change each time, we only care that the right keys
         # end up in the results dict.
@@ -234,7 +237,9 @@ class UbergridUnitTest(TestCase):
 
         # Validate that the ValueError is raised.
         with self.assertRaises(ValueError):
-            ug._evaluate_model(estimator, X, y, metrics + ["nope"], prefix)
+            bad_grid_search_context = grid_search_context
+            bad_grid_search_context['metrics'] += ['nope']
+            ug._evaluate_model(estimator, X, y, bad_grid_search_context, prefix)
 
     def test_evaluate_model_multiclass(self):
         # Read in all the stuff we want.
@@ -244,13 +249,17 @@ class UbergridUnitTest(TestCase):
         y = training_data[['target']]
         param_file = open('multiclass/search_params.json','r')
         search_params = json.load(param_file)
-        metrics = search_params['scoring']
+
+        grid_search_context = {
+            'metrics': search_params['scoring']
+        }
         prefix = 'train'
 
         # Fit the estimator.
         estimator.fit(X,y)
 
-        results = ug._evaluate_model(estimator, X, y, metrics, prefix)
+        results = \
+            ug._evaluate_model(estimator, X, y, grid_search_context, prefix)
 
         # The values will change each time - making sure we can call all the
         # metrics successfully is the goal.
@@ -278,12 +287,15 @@ class UbergridUnitTest(TestCase):
         y = training_data[['target']]
         param_file = open('regression/search_params.json', 'r')
         search_params = json.load(param_file)
-        metrics = search_params['scoring']
+        grid_search_context = {
+            'metrics': search_params['scoring']
+        }
         prefix = "train"
 
         estimator.fit(X,y)
 
-        results = ug._evaluate_model(estimator, X, y, metrics, prefix)
+        results = \
+            ug._evaluate_model(estimator, X, y, grid_search_context, prefix)
 
         # The values will vary from run to run. Here we want to test that all
         # of the fields in the result set are present.
@@ -311,11 +323,15 @@ class UbergridUnitTest(TestCase):
         y = training_data[['target']]
         search_param_file = open('classification/search_params.json','r')
         search_params = json.load(search_param_file)
-        metrics = search_params['scoring']
-        fit_params = search_params['fit_params']
+        grid_search_context = {
+            'metrics': search_params['scoring'],
+            'fit_params': search_params['fit_params'],
+            'X_train': X,
+            'y_train': y
+        }
 
         estimator, results = \
-            ug._train_model(estimator, X, y, metrics, fit_params)
+            ug._train_model(estimator, grid_search_context)
 
         # The estimator object will crash if fit isn't called, so the test
         # will fail if that's incorrect. This tests to ensure _evaluate_model
@@ -340,7 +356,6 @@ class UbergridUnitTest(TestCase):
         search_param_file.close()
     
     def test_cross_validate(self):
-        # TODO: Implement.
         # Read the stuff we need.
         estimator = joblib.load('classification/classifier.pkl')
 
@@ -363,14 +378,18 @@ class UbergridUnitTest(TestCase):
         fit_params = search_params['fit_params']
         n_splits = 3
 
+        grid_search_context = {
+            'cross_validation': n_splits,
+            'X_train': X_train,
+            'y_train': y_train,
+            'metrics': metrics,
+            'fit_params': fit_params
+        }
+
         results = ug._cross_validate(
             estimator,
             model_id,
-            X_train,
-            y_train,
-            metrics,
-            fit_params,
-            n_splits)
+            grid_search_context)
 
         result_keys_truth = [
             "cross_validation_accuracy",
@@ -454,21 +473,25 @@ class UbergridUnitTest(TestCase):
         
         output_dir = TEST_OUTPUT_DIR
 
+        grid_search_context = {
+            'training_file': training_file,
+            'validation_file': validation_file,
+            'X_train': X_train,
+            'y_train': y_train,
+            'X_validation': X_validation,
+            'y_validation': y_validation,
+            'metrics': metrics,
+            'fit_params': fit_params,
+            'target_col': target_col,
+            'output_dir': output_dir,
+            'cross_validation': 3
+        }
+
         ug._train_and_evaluate(
             estimator,
             params,
             model_id,
-            training_file,
-            output_dir,
-            X_train,
-            y_train,
-            target_col,
-            metrics,
-            fit_params,
-            X_validation = X_validation,
-            y_validation = y_validation,
-            validation_file = validation_file,
-            cross_validation = 3)
+            grid_search_context)
 
         result_keys_truth = [
            "training_accuracy",

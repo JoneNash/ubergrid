@@ -19,7 +19,6 @@ from sklearn.model_selection import ParameterGrid, KFold
 from sklearn.metrics import SCORERS
 from sklearn.base import BaseEstimator
 
-# TODO: Refactor the arguments to _train_and_evaluate.
 # TODO: Add PMML generation.
 # TODO: Add PMML timing.
 
@@ -50,44 +49,21 @@ logging.basicConfig(format="%(asctime)s %(message)s",
 logger = logging.getLogger(__name__)
 
 def _evaluate_model(estimator: BaseEstimator, 
-                    X: DataFrame, 
-                    y: DataFrame, 
-                    metrics: List[str], 
+                    X: DataFrame,
+                    y: DataFrame,
+                    grid_search_context: Dict[str, Any],
                     prefix: str) -> Dict[str, Any]:
     """ Evaluates the performance of the model on the provided data, for the
         provided metrics, and returns a dictionary of results.
 
         :param estimator: A scikit-learn estimator object (trained).
+
+        :param grid_search_context:
+            A dictionary containing information about the grid search.
         
         :param X: The data to evaluate the model on, without the true value.
         
         :param y: The true values for the data in X.
-        
-        :param metrics: 
-            A list of metric names to test. They must be metrics in
-            scikit-learn's ``SCORERS`` dict 
-            (see `sklearn.metrics <http://scikit-learn.org/stable/modules/model_evaluation.html#the-scoring-parameter-defining-model-evaluation-rules>`_).
-            Some of these metrics require additional data that isn't currently 
-            available within the schema of ``search_params``. These are the 
-            metrics which `are` available:
-
-            * ``"accuracy"``
-            * ``"f1"``
-            * ``"recall"``
-            * ``"precision"``
-            * ``"log_loss"``
-            * ``"roc_auc"``
-            * ``"average_precision"``
-            * ``"f1_micro"``
-            * ``"f1_macro"``
-            * ``"precision_micro"``
-            * ``"precision_macro"``
-            * ``"recall_micro"``
-            * ``"recall_macro"``
-            * ``"neg_mean_absolute_error"``
-            * ``"neg_mean_squared_error"``
-            * ``"neg_median_absolute_error"``
-            * ``"r2"``
         
         :param prefix: A string to prefix the fields in the results dict with.
 
@@ -106,7 +82,7 @@ def _evaluate_model(estimator: BaseEstimator,
                     "{prefix}_total_prediction_records": number_of_records
                 }
     """
-
+    metrics = grid_search_context['metrics']
     # Validate that the metrics are in the available list.
     if len(set(metrics) - AVAILABLE_METRICS) != 0:
         logger.critical("{} are not available metrics.".format(
@@ -139,28 +115,15 @@ def _evaluate_model(estimator: BaseEstimator,
     return results
 
 def _train_model(estimator: BaseEstimator,
-                 X: DataFrame, 
-                 y: DataFrame, 
-                 metrics: List[str],
-                 fit_params: Dict[str, Any]) \
+                 grid_search_context: Dict[str, Any]) \
                  -> Tuple[Dict[str, Any], BaseEstimator]:
     """ Trains the model on the provided data, and evaluates it for the provided
         metrics.
 
         :param estimator: A scikit-learn estimator object (untrained).
 
-        :param X: The data on which to train the estimator, without the target.
-
-        :param y: The ground truth target for X.
-
-        :param metrics: 
-            A list of strings describing the metrics to calculate
-            against the training data. They must be in scikit-learn's SCORERS dict.
-            See `sklearn.metrics <http://scikit-learn.org/stable/modules/model_evaluation.html#the-scoring-parameter-defining-model-evaluation-rules>`_).
-
-        :param fit_params: 
-            A dictionary of parameters to send to the estimator's
-            ``fit`` method.
+        :param grid_search_context:
+            A dictionary containing information related to the grid search.
 
         :returns: 
             A tuple containing the results in a dict, with fields named
@@ -176,22 +139,22 @@ def _train_model(estimator: BaseEstimator,
                     "training_time_total": time_for_training
                 }
     """
+    X = grid_search_context['X_train']
+    y = grid_search_context['y_train']
+    fit_params = grid_search_context['fit_params']
+
     fit_start = time()
     estimator.fit(X, y, **fit_params)
     fit_end = time()
 
-    results = _evaluate_model(estimator, X, y, metrics, "training")
+    results = _evaluate_model(estimator, X, y, grid_search_context, "training")
     results["training_time_total"] = fit_end - fit_start
 
     return estimator, results
 
 def _cross_validate(estimator: BaseEstimator,
                     model_id: int,
-                    X_train: DataFrame,
-                    y_train: DataFrame,
-                    metrics: List[str],
-                    fit_params: Dict[str, Any],
-                    n_splits: int) -> Dict[str, Any]:
+                    grid_search_context: Dict[str, Any]) -> Dict[str, Any]:
     """ Performs K-Fold cross validation on the estimator for a given training
         set.
 
@@ -199,16 +162,8 @@ def _cross_validate(estimator: BaseEstimator,
 
         :param model_id: The model identifier.
 
-        :param X_train: The training data in a DataFrame.
-
-        :param y_train: The training data ground truth values in a DataFrame.
-
-        :param metrics: A list of scores to evaluate.
-
-        :param fit_params: 
-            A dict of parameters to pass to the estimators ``fit`` method.
-
-        :param n_splits: The number of splits in the validation.
+        :param grid_search_context:
+            A dictionary containing values related to the grid search.
 
         :returns:
             A dict containing evaluation metrics for the cross validation. There
@@ -258,6 +213,12 @@ def _cross_validate(estimator: BaseEstimator,
                         mean_of_prediction_record_count_list
                 }
     """
+
+    n_splits = grid_search_context['cross_validation']
+    X_train = grid_search_context['X_train']
+    y_train = grid_search_context['y_train']
+    fit_params = grid_search_context['fit_params']
+
     cross_validation_results = []
     k_folds = KFold(n_splits=n_splits)
     for cv_train, cv_test in k_folds.split(X_train):
@@ -282,7 +243,7 @@ def _cross_validate(estimator: BaseEstimator,
                 estimator,
                 X_train.iloc[cv_train],
                 y_train.iloc[cv_train],
-                metrics,
+                grid_search_context,
                 "cross_validation_training")
         logger.info("Completed evaluating model {} on cross validation "\
             .format(model_id) +
@@ -295,12 +256,11 @@ def _cross_validate(estimator: BaseEstimator,
         logger.info("Evaluating model {} on cross validation test set."\
             .format(model_id))
         cv_validation_results = \
-            _evaluate_model(
-                estimator,
-                X_train.iloc[cv_test],
-                y_train.iloc[cv_test],
-                metrics,
-                "cross_validation")
+            _evaluate_model(estimator, 
+                            X_train.iloc[cv_test],
+                            y_train.iloc[cv_test],
+                            grid_search_context, 
+                            "cross_validation")
         logger.info("Completed evaluating model {} on cross validation "\
             .format(model_id) +
             "test set. Took {} seconds for {} records.".format(
@@ -328,23 +288,10 @@ def _cross_validate(estimator: BaseEstimator,
     logger.info("Cross validation for model {} completed.".format(model_id))
     return cv_results
 
-# TODO: This _train_and_evaluate function is kind of a mess. It's not a huge
-# deal since it's internal to the system only, but it might be worth a refactor
-# at some point.
 def _train_and_evaluate(estimator: BaseEstimator,
                         params: Dict[str, Any],
                         model_id: int,
-                        training_file: str,
-                        output_dir: str,
-                        X_train: DataFrame,
-                        y_train: DataFrame,
-                        target_col: str,
-                        metrics: List[str],
-                        fit_params:Dict[str, Any],
-                        X_validation: DataFrame = None,
-                        y_validation: DataFrame = None,
-                        validation_file: str = None,
-                        cross_validation: int = None) -> None:
+                        grid_search_context: Dict[str, Any]) -> None:
     """ Performs training and evaluation on a scikit-learn estimator, saving the
         results to disk.
     
@@ -413,44 +360,22 @@ def _train_and_evaluate(estimator: BaseEstimator,
 
         :param params: The parameters for building the model, as a dict.
 
-        :param model_id: An integer id for the model.
+        :param model_id: The integer identifying the model.
 
-        :param training_file: The name of the file with the training data.
-
-        :param output_dir: The name of the output directory.
-
-        :param X_train: The training data, without the the target column.
-
-        :param y_train: The training data ground-truth values.
-
-        :param target_col: The name of the target column.
-
-        :param metrics: 
-            A list of strings describing the metrics to evaluate. Each
-            string must correspond to a value in scikit-learn's ``SCORERS`` 
-            dict. See `sklearn.metrics <http://scikit-learn.org/stable/modules/model_evaluation.html#the-scoring-parameter-defining-model-evaluation-rules>`_
-
-        :param fit_params: Parameters to pass to the estimator's ``fit`` method.
-
-        :param X_validation: 
-            The validation data, without the target_column.
-            Default: None.
-
-        :param y_validation: 
-            The ground truth target values for the validation data.
-            Default: None.
-
-        :param validation_file: 
-            The name of the file with the validation data.
-            Default: None.
-
-        :param cross_validation:
-            The number of cross validation folds to perform.
-            Default: None.
+        :param grid_search_context:
+            A dictionary holding parameters and values related to the grid
+            search. 
 
         :returns: Nothing, writes to the files described above.
         
     """
+    # Unpack the grid search context.
+    output_dir = grid_search_context['output_dir']
+    cross_validation = grid_search_context['cross_validation']
+    validation_file = grid_search_context['validation_file']
+    target_col = grid_search_context['target_col']
+    training_file = grid_search_context['training_file']
+    
     param_str = ", ".join(
            ["{}={}".format(param_name, param_value)
             for param_name, param_value in params.items()])
@@ -477,21 +402,14 @@ def _train_and_evaluate(estimator: BaseEstimator,
         cv_results = \
             _cross_validate(estimator,
                             model_id,
-                            X_train,
-                            y_train,
-                            metrics,
-                            fit_params,
-                            cross_validation)
+                            grid_search_context)
        
     logger.info(
         "Training model {} and evaluating the model on the training set."\
         .format(model_id))
     estimator, training_results = \
-        _train_model(estimator, 
-                     X_train, 
-                     y_train, 
-                     metrics, 
-                     fit_params)
+        _train_model(estimator, grid_search_context)
+    
     logger.info(
         "Model {} trained in {} seconds.".format(
             model_id, training_results["training_time_total"]))
@@ -507,10 +425,10 @@ def _train_and_evaluate(estimator: BaseEstimator,
         logger.info(
             "Evaluating model {} on the validation set.".format(model_id))
     validation_results = \
-        _evaluate_model(estimator, 
-                        X_validation, 
-                        y_validation, 
-                        metrics,
+            _evaluate_model(estimator,
+                        grid_search_context['X_validation'],
+                        grid_search_context['y_validation'], 
+                        grid_search_context, 
                         "validation") \
         if validation_file is not None else {}
 
@@ -547,32 +465,29 @@ def _train_and_evaluate(estimator: BaseEstimator,
             json.dumps(results) + "\n")
 
 def _dry_run(grid: ParameterGrid,
-             output_dir: str,
-             scoring: List[str],
-             fit_params: Dict[str, Any],
-             validation_file: str,
-             cross_validation: int):
+             grid_search_context: Dict[str, Any]):
     """ Logs the actions that will execute in the grid search without actually
         executing them.
 
         :param grid: A scikit-learn ParameterGrid object.
         
-        :param output_dir: The name of the output directory for the models.
-
-        :param fit_params: The parameters to send to the model's ``fit`` method.
-
-        :param validation_file: 
-            The name of the file with the validation data (if present).
-        
-        :param cross_validation:
-            The number of cross validation folds (if present).
+        :param grid_search_context:
+            A dictionary containing data about the grid search.
     """
+
+    # Unpack the grid search context.
+    output_dir = grid_search_context['output_dir']
+    fit_params = grid_search_context['fit_params']
+    metrics = grid_search_context['metrics']
+    cross_validation = grid_search_context['cross_validation']
+    validation_file = grid_search_context['validation_file']
+
     logger.info("Dry run: output_dir = {}".format(output_dir))
     logger.info("Dry run: Models trained with fit params {}.".format(
         ", ".join(["{}={}".format(fit_param_name, fit_param_value)
          for fit_param_name, fit_param_value in fit_params.items()])))
     logger.info("Dry run: Models evaluated with metrics {}.".format(
-        ", ".join(scoring)))
+        ", ".join(metrics)))
     if cross_validation:
         logger.info("Dry run: Models cross validated with {} folds."\
             .format(cross_validation))
@@ -786,13 +701,24 @@ def _main(search_params_file: str,
     X_validation = validation_set[feature_cols] if validation_file else None
     y_validation = validation_set[[target_col]] if validation_file else None
 
+    # The grid search context contains information that is held consistent
+    # with each run.
+    grid_search_context = {
+        "fit_params": fit_params,
+        "X_train": X_train,
+        "y_train": y_train,
+        "X_validation": X_validation,
+        "y_validation": y_validation,
+        "output_dir": output_dir,
+        "metrics": search_params['scoring'],
+        "cross_validation": cross_validation,
+        "training_file": training_file,
+        "validation_file": validation_file,
+        "target_col": target_col
+    }
+
     if dry_run:
-        _dry_run(grid, 
-                 output_dir, 
-                 search_params['scoring'], 
-                 fit_params, 
-                 validation_file, 
-                 cross_validation)
+        _dry_run(grid, grid_search_context)
         # Exit the program.
         return
     
@@ -804,19 +730,9 @@ def _main(search_params_file: str,
         # All the args to _train_and_evaluate.
         (joblib.load(search_params['estimator']),
          params,
-         ii,
-         training_file,
-         output_dir,
-         X_train,
-         y_train,
-         target_col,
-         search_params['scoring'],
-         fit_params,
-         X_validation=X_validation,
-         y_validation=y_validation,
-         validation_file=validation_file,
-         cross_validation=cross_validation)
-        for ii, params in enumerate(grid))
+         model_id,
+         grid_search_context)
+        for model_id, params in enumerate(grid))
 
     # Unify all of the results files into one.
     logger.info("Consolidating results.")

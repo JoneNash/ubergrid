@@ -45,8 +45,8 @@ def setUpModule():
         DataFrame(data = np.c_[classification_X_test, classification_y_test],
                   columns = feature_cols + ['target'])
 
-    classification_train.to_csv(CLASSIFICATION_DIR + '/train.csv')
-    classification_test.to_csv(CLASSIFICATION_DIR + '/test.csv')
+    classification_train.to_csv(CLASSIFICATION_DIR + '/train.csv', index=False)
+    classification_test.to_csv(CLASSIFICATION_DIR + '/test.csv', index=False)
     
     # Make the binary classification model.
     classification_model = GradientBoostingClassifier()
@@ -100,8 +100,8 @@ def setUpModule():
         DataFrame(data = np.c_[multiclass_X_test, multiclass_y_test],
                   columns = feature_cols + ['target'])
 
-    multiclass_train.to_csv(MULTICLASS_DIR + '/train.csv')
-    multiclass_test.to_csv(MULTICLASS_DIR + '/test.csv')
+    multiclass_train.to_csv(MULTICLASS_DIR + '/train.csv', index=False)
+    multiclass_test.to_csv(MULTICLASS_DIR + '/test.csv', index=False)
     
     # Make the binary classification model.
     multiclass_model = GradientBoostingClassifier()
@@ -152,8 +152,8 @@ def setUpModule():
         DataFrame(data = np.c_[regression_X_test, regression_y_test],
                   columns = feature_cols + ['target'])
 
-    regression_train.to_csv(REGRESSION_DIR + '/train.csv')
-    regression_test.to_csv(REGRESSION_DIR + '/test.csv')
+    regression_train.to_csv(REGRESSION_DIR + '/train.csv', index=False)
+    regression_test.to_csv(REGRESSION_DIR + '/test.csv', index=False)
     
     # Make the binary classification model.
     regression_model = SGDRegressor()
@@ -327,7 +327,8 @@ class UbergridUnitTest(TestCase):
             'metrics': search_params['scoring'],
             'fit_params': search_params['fit_params'],
             'X_train': X,
-            'y_train': y
+            'y_train': y,
+            'make_pmml': True
         }
 
         estimator, results = \
@@ -484,7 +485,8 @@ class UbergridUnitTest(TestCase):
             'fit_params': fit_params,
             'target_col': target_col,
             'output_dir': output_dir,
-            'cross_validation': 3
+            'cross_validation': 3,
+            'make_pmml': True
         }
 
         ug._train_and_evaluate(
@@ -568,7 +570,8 @@ class UbergridUnitTest(TestCase):
            "model_file",
            "validation_file",
            "max_depth",
-           "n_estimators"
+           "n_estimators",
+           "pmml_file"
         ]
 
         # Check that the estimator file exists.
@@ -598,6 +601,11 @@ class UbergridUnitTest(TestCase):
 
         self.assertEqual(results["validation_file"], 
                          CLASSIFICATION_DIR + "/test.csv")
+
+        self.assertEqual(
+            results["pmml_file"],
+            "{}/model_{}.pmml".format(output_dir, model_id))
+        self.assertTrue(os.path.exists(results["pmml_file"]))
 
         # Cleanup.
         search_param_file.close()

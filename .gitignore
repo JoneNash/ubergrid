@@ -1,2 +1,5 @@
 __pycache__/
 doc/build/
+*.jar
+ubergrid/src/pip-delete-this-directory.txt
+ubergrid/src/sklearn2pmml

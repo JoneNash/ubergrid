@@ -46,10 +46,14 @@ logging.basicConfig(format="%(asctime)s %(message)s",
                     level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Import the PMML converter if it's available. If it's not, issue a warning but
+# continue. If PMML support is needed elsewhere the error will be thrown there.
+PMML_AVAILABLE = True
 try:
     from sklearn2pmml import PMMLPipeline, sklearn2pmml
 except:
     logger.warn("sklearn2pmml not installed. PMML options won't be available.")
+    PMML_AVAILABLE = False
 
 from sklearn_pandas import DataFrameMapper
 
@@ -657,6 +661,10 @@ def _main(search_params_file: str,
             that will be executed.
             Default: False
 
+        :param make_pmml:
+            Whether to create a PMML file using the sklearn2pmml package. This
+            package isn't installed by default.
+
         :raises ValueError: If the ``search_params_file`` doesn't exist.
 
         :raises ValueError: If the ``training_set_file`` doesn't exist.
@@ -670,6 +678,10 @@ def _main(search_params_file: str,
         :raises ValueError: 
             If the validation set is present and doesn't have the same columns 
             as the training set.
+        
+        :raises RuntimeError:
+            If PMML support is needed (for make_pmml), but not available at
+            runtime.
 
 
         :returns: 
@@ -729,6 +741,11 @@ def _main(search_params_file: str,
             "Validation set doesn't have the same columns as the training set.")
         raise ValueError("Validation set doesn't have the same columns as "
             "the training set.")
+    
+    if make_pmml and not PMML_AVAILABLE:
+        logger.critical("PMML support is not installed. "
+            "Install sklearn2pmml for PMML support.")
+        raise RuntimeError("PMML support is not installed.")
 
     grid = ParameterGrid(search_params['param_grid'])
     fit_params = search_params['fit_params'] \

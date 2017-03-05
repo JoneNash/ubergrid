@@ -2,6 +2,7 @@ import json
 import sys
 import os
 import logging
+import subprocess
 
 import numpy as np
 
@@ -19,7 +20,7 @@ from sklearn.model_selection import ParameterGrid, KFold
 from sklearn.metrics import SCORERS
 from sklearn.base import BaseEstimator
 
-# TODO: Add PMML timing.
+# TODO: Convert the calls to `system` into subprocess pipes.
 
 AVAILABLE_METRICS = {
     "accuracy",
@@ -45,17 +46,6 @@ logging.basicConfig(format="%(asctime)s %(message)s",
                     datefmt="%Y-%m-%d %H:%M:%S",
                     level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Import the PMML converter if it's available. If it's not, issue a warning but
-# continue. If PMML support is needed elsewhere the error will be thrown there.
-PMML_AVAILABLE = True
-try:
-    from sklearn2pmml import PMMLPipeline, sklearn2pmml
-except:
-    logger.warn("sklearn2pmml not installed. PMML options won't be available.")
-    PMML_AVAILABLE = False
-
-from sklearn_pandas import DataFrameMapper
 
 def _evaluate_model(estimator: BaseEstimator, 
                     X: DataFrame,
@@ -151,31 +141,9 @@ def _train_model(estimator: BaseEstimator,
     X = grid_search_context['X_train']
     y = grid_search_context['y_train']
     fit_params = grid_search_context['fit_params']
-    make_pmml = grid_search_context['make_pmml']
 
     fit_start = time()
-    if make_pmml:
-        # The mapper enables rich PMML files.
-        estimator_mapper = DataFrameMapper([
-            (list(X.columns), None)
-        ])
-
-        # The pipeline is required to make a PMML file.
-        estimator_pipeline = PMMLPipeline([
-            ("mapper", estimator_mapper),
-            ("estimator", estimator)
-        ])
-
-        # We have to change the keys in fit_params to ensure they're properly
-        # applied in the pipeline.
-        estimator_pipeline.fit(
-            X, y, **keymap(lambda x: "estimator__" + x, fit_params))
-        
-        # Assign the estimator to the pipeline. A pipeline is indistinguishable
-        # from an estimator.
-        estimator = estimator_pipeline
-    else:
-        estimator.fit(X, y, **fit_params)
+    estimator.fit(X, y, **fit_params)
     fit_end = time()
 
     results = _evaluate_model(estimator, X, y, grid_search_context, "training")
@@ -406,7 +374,6 @@ def _train_and_evaluate(estimator: BaseEstimator,
     validation_file = grid_search_context['validation_file']
     target_col = grid_search_context['target_col']
     training_file = grid_search_context['training_file']
-    make_pmml = grid_search_context['make_pmml']
     
     param_str = ", ".join(
            ["{}={}".format(param_name, param_value)
@@ -486,20 +453,11 @@ def _train_and_evaluate(estimator: BaseEstimator,
     if validation_file:
         results["validation_file"] = validation_file
 
-    # Add the pmml file if present.
-    if make_pmml:
-        results["pmml_file"] = "{}/model_{}.pmml".format(output_dir, model_id)
-
     # Write the results _after_ the model.
     logger.info("Writing estimator for model {} to {}."\
                 .format(model_id, model_file))
     joblib.dump(estimator, model_file)
     
-    if make_pmml:
-        logger.info("Writing PMML for model {} to {}/model_{}.pmml."\
-            .format(model_id, output_dir, model_id))
-        sklearn2pmml(estimator, "{}/model_{}.pmml".format(output_dir, model_id))
-        
     logger.info("Writing results for model {} to {}."\
                 .format(model_id, results_file))
     with open(results_file, 'w') as results_out:
@@ -523,7 +481,6 @@ def _dry_run(grid: ParameterGrid,
     metrics = grid_search_context['metrics']
     cross_validation = grid_search_context['cross_validation']
     validation_file = grid_search_context['validation_file']
-    make_pmml = grid_search_context['make_pmml']
 
     logger.info("Dry run: output_dir = {}".format(output_dir))
     logger.info("Dry run: Models trained with fit params {}.".format(
@@ -543,9 +500,6 @@ def _dry_run(grid: ParameterGrid,
             for param_name, param_value in params.items()])
         logger.info("Dry run: Model {} trained and evaluated with {}.".format(
             model_id, param_str))
-        if make_pmml:
-            logger.info("Dry run: Making PMML for model {}.".format(model_id))
-
 
 def _main(search_params_file: str,
           target_col: str,
@@ -554,8 +508,7 @@ def _main(search_params_file: str,
           validation_file: str = None,
           cross_validation: int = None,
           n_jobs: int = 1,
-          dry_run: bool = False,
-          make_pmml: bool = False) -> None:
+          dry_run: bool = False) -> None:
     """ Executes an entire parameter grid, saving all results and models to disk.
 
         This method runs the ``_train_and_evaluate`` function on each combination
@@ -573,7 +526,6 @@ def _main(search_params_file: str,
                 "training_file": "/path/to/training.csv",
                 "model_file": "/path/to/model.pkl",
                 "validation_file": "/path_to_validation.csv", # If used.
-                "pmml_file": "/path/to/model.pmml", # If used.
 
                 # The name of the target column.
                 "target": "target_col_name",
@@ -661,10 +613,6 @@ def _main(search_params_file: str,
             that will be executed.
             Default: False
 
-        :param make_pmml:
-            Whether to create a PMML file using the sklearn2pmml package. This
-            package isn't installed by default.
-
         :raises ValueError: If the ``search_params_file`` doesn't exist.
 
         :raises ValueError: If the ``training_set_file`` doesn't exist.
@@ -679,11 +627,6 @@ def _main(search_params_file: str,
             If the validation set is present and doesn't have the same columns 
             as the training set.
         
-        :raises RuntimeError:
-            If PMML support is needed (for make_pmml), but not available at
-            runtime.
-
-
         :returns: 
             Nothing. Writes all of the models in the grid as pickled files in
             ``output_dir`` along with a ``results.json``.
@@ -742,11 +685,6 @@ def _main(search_params_file: str,
         raise ValueError("Validation set doesn't have the same columns as "
             "the training set.")
     
-    if make_pmml and not PMML_AVAILABLE:
-        logger.critical("PMML support is not installed. "
-            "Install sklearn2pmml for PMML support.")
-        raise RuntimeError("PMML support is not installed.")
-
     grid = ParameterGrid(search_params['param_grid'])
     fit_params = search_params['fit_params'] \
                  if 'fit_params' in search_params.keys() else {}
@@ -774,10 +712,10 @@ def _main(search_params_file: str,
         "cross_validation": cross_validation,
         "training_file": training_file,
         "validation_file": validation_file,
-        "target_col": target_col,
-        "make_pmml": make_pmml
+        "target_col": target_col
     }
 
+    # Step through the dry run _after_ validating all of the inputs.
     if dry_run:
         _dry_run(grid, grid_search_context)
         # Exit the program.

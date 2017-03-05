@@ -191,7 +191,7 @@ def tearDownModule():
     subprocess.run(['rm', '-rf', TEST_OUTPUT_DIR])
 
 class UbergridUnitTest(TestCase):
-    
+
     def test_evaluate_model_classifier(self) -> None:
         """ Tests the _evaluate_model function for the binary classification
             problem.
@@ -327,8 +327,7 @@ class UbergridUnitTest(TestCase):
             'metrics': search_params['scoring'],
             'fit_params': search_params['fit_params'],
             'X_train': X,
-            'y_train': y,
-            'make_pmml': True
+            'y_train': y
         }
 
         estimator, results = \
@@ -485,8 +484,7 @@ class UbergridUnitTest(TestCase):
             'fit_params': fit_params,
             'target_col': target_col,
             'output_dir': output_dir,
-            'cross_validation': 3,
-            'make_pmml': True
+            'cross_validation': 3
         }
 
         ug._train_and_evaluate(
@@ -570,8 +568,7 @@ class UbergridUnitTest(TestCase):
            "model_file",
            "validation_file",
            "max_depth",
-           "n_estimators",
-           "pmml_file"
+           "n_estimators"
         ]
 
         # Check that the estimator file exists.
@@ -601,11 +598,6 @@ class UbergridUnitTest(TestCase):
 
         self.assertEqual(results["validation_file"], 
                          CLASSIFICATION_DIR + "/test.csv")
-
-        self.assertEqual(
-            results["pmml_file"],
-            "{}/model_{}.pmml".format(output_dir, model_id))
-        self.assertTrue(os.path.exists(results["pmml_file"]))
 
         # Cleanup.
         search_param_file.close()

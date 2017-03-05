@@ -1,5 +1,4 @@
 import json
-import sys
 import os
 import logging
 import subprocess
@@ -7,6 +6,8 @@ import subprocess
 import numpy as np
 
 from time import time
+
+from glob import glob
 
 from pandas import DataFrame, Series, read_csv
 
@@ -19,8 +20,6 @@ from sklearn.externals.joblib import Parallel, delayed
 from sklearn.model_selection import ParameterGrid, KFold
 from sklearn.metrics import SCORERS
 from sklearn.base import BaseEstimator
-
-# TODO: Convert the calls to `system` into subprocess pipes.
 
 AVAILABLE_METRICS = {
     "accuracy",
@@ -736,9 +735,10 @@ def _main(search_params_file: str,
 
     # Unify all of the results files into one.
     logger.info("Consolidating results.")
-    os.system(
-        "cat {output_dir}/results_*.json > ".format(output_dir=output_dir) +
-        "{output_dir}/results.json".format(output_dir=output_dir))
-    # Remove the intermediate results files.
+    results_glob = glob("{}/results_*.json".format(output_dir))
+    
+    with open('{}/results.json'.format(output_dir), 'w') as outfile:
+        subprocess.run(['cat'] + results_glob, stdout=outfile)
+
     logger.info("Deleting intermediate results.")
-    os.system("rm {output_dir}/results_*.json".format(output_dir=output_dir))
+    subprocess.run(["rm"] + results_glob)

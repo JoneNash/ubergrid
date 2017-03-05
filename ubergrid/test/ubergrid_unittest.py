@@ -566,6 +566,7 @@ class UbergridUnitTest(TestCase):
            "training_file",
            "target",
            "model_file",
+           "model_id",
            "validation_file",
            "max_depth",
            "n_estimators"
@@ -595,6 +596,8 @@ class UbergridUnitTest(TestCase):
         self.assertEqual(
             results["model_file"],
             "{}/model_{}.pkl".format(output_dir, model_id))
+
+        self.assertEqual(results["model_id"], model_id)
 
         self.assertEqual(results["validation_file"], 
                          CLASSIFICATION_DIR + "/test.csv")
@@ -654,6 +657,7 @@ class UbergridUnitTest(TestCase):
            "training_file",
            "target",
            "model_file",
+           "model_id",
            "validation_file",
            "max_depth",
            "n_estimators"
@@ -693,6 +697,7 @@ class UbergridUnitTest(TestCase):
             # twice isn't the worst idea in the world.
             self.assertEqual(sorted(list(result.keys())),
                               sorted(result_keys_truth))
+            self.assertEqual(result["model_id"], model_id)
 
 
         

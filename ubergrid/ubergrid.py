@@ -21,6 +21,8 @@ from sklearn.model_selection import ParameterGrid, KFold
 from sklearn.metrics import SCORERS
 from sklearn.base import BaseEstimator
 
+# TODO: Validate that search_params file contains the right keys.
+
 AVAILABLE_METRICS = {
     "accuracy",
     "f1",

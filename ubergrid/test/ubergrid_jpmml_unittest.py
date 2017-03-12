@@ -129,8 +129,32 @@ class UbergridJPMMLUnitTest(TestCase):
         subprocess.run(["rm", "-rf", "output.csv"])
 
     def test_time_pmml(self) -> None:
+        """ Tests that the _time_pmml function returns the correct values.
+        """
+        model_results_file = TEST_OUTPUT_DIR + '/results.json'
+        fin = open(model_results_file, 'r')
+        model_results_all = [json.loads(l) for l in fin]
+        fin.close()
+
+        model_results = model_results_all[0]
+        pmml_file = ugp._make_pmml(model_results)
+
         # Test that the correct result fields are returned.
-        pass # TODO: Implement.
+        pmml_timing_results = \
+            ugp._time_pmml(pmml_file, 
+                           PMML_EVALUATOR, 
+                           TEST_INPUT_DIR + '/train.csv')
+
+        pmml_timing_truth_keys = set(
+            [
+                "pmml_total_prediction_time",
+                "pmml_total_prediction_records"
+            ])
+        
+        self.assertEqual(
+            pmml_timing_truth_keys, set(pmml_timing_results.keys()))
+        self.assertEqual(
+            100, pmml_timing_results['pmml_total_prediction_records'])
 
     def test_main(self) -> None:
         # Test that the results file has the correct fields.

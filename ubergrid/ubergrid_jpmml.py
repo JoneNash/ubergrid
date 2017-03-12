@@ -83,7 +83,6 @@ def _time_pmml(pmml_file: str, pmml_evaluator: str, file_to_evaluate: str) -> \
             A dict with the number of records in the file and the total time
             for prediction.
     """
-    # TODO: Unit test.
     start = time()
     subprocess.run([
         "java",
@@ -93,7 +92,7 @@ def _time_pmml(pmml_file: str, pmml_evaluator: str, file_to_evaluate: str) -> \
         "--model",
         pmml_file,
         "--input",
-        file_to_time,
+        file_to_evaluate,
         "--output",
         "output.csv"])
     stop = time()
@@ -101,7 +100,7 @@ def _time_pmml(pmml_file: str, pmml_evaluator: str, file_to_evaluate: str) -> \
     subprocess.run(["rm", "-rf", "output.csv"])
     return {
         "pmml_total_prediction_time": stop - start,
-        "pmml_total_prediction_records": _count_lines(file_to_time)
+        "pmml_total_prediction_records": _count_lines(file_to_evaluate) - 1
     }
 
 def _main(results_dir: str,

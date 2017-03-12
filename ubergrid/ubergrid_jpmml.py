@@ -46,7 +46,6 @@ def _make_pmml(model_results: Dict[str,Any]) -> str:
 
         :returns: The name of the PMML file for the model.
     """
-    # TODO: Unit test.
     training_file = model_results['training_file']
     target = model_results['target']
     model_file = model_results['model_file']
@@ -90,7 +89,7 @@ def _time_pmml(pmml_file: str, pmml_evaluator: str, file_to_evaluate: str) -> \
         "java",
         "-cp",
         pmml_evaluator,
-        "org.jpmml.evaluator.TestingExample",
+        "org.jpmml.evaluator.EvaluationExample",
         "--model",
         pmml_file,
         "--input",

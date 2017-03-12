@@ -39,8 +39,8 @@ def setUpModule():
             "sample_weight": None
         },
         "param_grid": {
-            "n_estimators": [100, 200, 300],
-            "max_depth": [2, 4, 6]
+            "n_estimators": [100, 200],
+            "max_depth": [2, 4]
         },
         "scoring": [
             "accuracy",
@@ -75,7 +75,7 @@ class UbergridJPMMLUnitTest(TestCase):
         """ Tests that the _count_lines function returns the correct value.
         """
         result = ugp._count_lines(TEST_OUTPUT_DIR + '/results.json')
-        self.assertEqual(9, result)
+        self.assertEqual(4, result)
     
     def test_make_pmml(self) -> None:
         """ Tests that the _make_pmml function returns the correct value and
@@ -157,7 +157,85 @@ class UbergridJPMMLUnitTest(TestCase):
             100, pmml_timing_results['pmml_total_prediction_records'])
 
     def test_main(self) -> None:
-        # Test that the results file has the correct fields.
-        # Test that the PMML files exist.
-        # Test that the PMML files make the correct predictions.
-        pass # TODO: Implement.
+
+        ugp._main(TEST_OUTPUT_DIR,
+                  PMML_EVALUATOR,
+                  TEST_INPUT_DIR + "/train.csv")
+
+        result_keys_truth = set(
+            [
+                "pmml_total_prediction_time",
+                "pmml_total_prediction_records",
+                "pmml_file",
+
+                "training_file",
+                "target",
+                "model_file",
+                "model_id",
+                "max_depth",
+                "n_estimators",
+
+                "training_accuracy",
+                "training_log_loss",
+                "training_roc_auc",
+                "training_total_prediction_time",
+                "training_total_prediction_records",
+                "training_time_total"
+            ])
+        
+        results = open(TEST_OUTPUT_DIR + '/results.json', 'r')
+        for result_line in results:
+            result = json.loads(result_line)
+
+            # Test that each result set has the correct fields.
+            self.assertEqual(result_keys_truth, set(result.keys()))
+            
+            # Test that the PMML files exist.
+            self.assertTrue(os.path.exists(result['pmml_file']))
+            
+            # Test that the PMML files make the correct predictions.
+            subprocess.run([
+                "java",
+                "-cp",
+                PMML_EVALUATOR,
+                "org.jpmml.evaluator.EvaluationExample",
+                "--model",
+                result['pmml_file'],
+                "--input",
+                TEST_INPUT_DIR + "/train.csv",
+                "--output",
+                "output.csv"])
+
+            pmml_predictions = pd.read_csv("output.csv")
+            estimator = joblib.load(result['model_file'])
+            estimator_input = \
+                pd.read_csv(result['training_file'])\
+                  .drop('target', 1) # Drop the target column.
+            estimator_predictions = estimator.predict_proba(estimator_input)
+
+            # Technically we only need to test one of these but it feels weird.
+            self.assertTrue(
+                ((estimator_predictions[:,0] - pmml_predictions.probability_0)
+                    < 1e-14).all())
+            self.assertTrue(
+                ((estimator_predictions[:,1] - pmml_predictions.probability_1) 
+                    < 1e-14).all())
+
+            subprocess.run(["rm", "-rf", "output.csv"])
+        
+        results.close()
+        
+        # Test the exceptions.
+        with self.assertRaises(ValueError):
+            ugp._main("/not/a/dir")
+        with self.assertRaises(ValueError):
+            ugp._main(TEST_OUTPUT_DIR,
+                      file_to_evaluate = TEST_INPUT_DIR + "/train.csv")
+        with self.assertRaises(ValueError):
+            ugp._main(TEST_OUTPUT_DIR,
+                      pmml_evaluator = "not/a/jar",
+                      file_to_evaluate = TEST_INPUT_DIR + "/train.csv")
+        with self.assertRaises(ValueError):
+            ugp._main(TEST_OUTPUT_DIR,
+                      pmml_evaluator = PMML_EVALUATOR,
+                      file_to_evaluate = "not/a/file")

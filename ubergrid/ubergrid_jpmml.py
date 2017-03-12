@@ -145,7 +145,6 @@ def _main(results_dir: str,
                     "pmml_total_prediction_records": number_of_pmml_predictions
                 }
     """
-    # TODO: Unit test.
     results_file = results_dir + "/results.json"
     # Validate the inputs.
     if not os.path.exists(results_file):
@@ -174,6 +173,7 @@ def _main(results_dir: str,
     results = [json.loads(r) for r in results_in]
     results_in.close()
 
+    new_results = []
     for result in results:
 
         logger.info("Creating PMML file for model {}.".format(
@@ -193,8 +193,9 @@ def _main(results_dir: str,
                         pmml_results['pmml_total_prediction_records']))
             # Integrate the results.
             result = { **result, **pmml_results }
+            new_results.append(result)
     
     # Now write all of the results back to disk, overwriting the previous file.
     with open(results_file, 'w') as results_out:
-        for result in results:
+        for result in new_results:
             results_out.write(json.dumps(result) + "\n")

@@ -21,8 +21,6 @@ from sklearn.model_selection import ParameterGrid, KFold
 from sklearn.metrics import SCORERS
 from sklearn.base import BaseEstimator
 
-# TODO: Validate that search_params file contains the right keys.
-
 AVAILABLE_METRICS = {
     "accuracy",
     "f1",
@@ -628,6 +626,12 @@ def _main(search_params_file: str,
         :raises ValueError: 
             If the validation set is present and doesn't have the same columns 
             as the training set.
+
+        :raises ValueError: 
+            If the "estimator" field isn't in the search params file.
+
+        :raises ValueError:
+            If the "param_grid" field isn't in the search params file.
         
         :returns: 
             Nothing. Writes all of the models in the grid as pickled files in
@@ -686,6 +690,22 @@ def _main(search_params_file: str,
             "Validation set doesn't have the same columns as the training set.")
         raise ValueError("Validation set doesn't have the same columns as "
             "the training set.")
+
+    if "estimator" not in search_params.keys():
+        logger.critical(
+            "The search params file {} needs an \"estimator\" field."\
+            .format(search_params_file))
+        raise ValueError(
+            "The search params file {} needs an \"estimator\" field."\
+            .format(search_params_file))
+    
+    if "param_grid" not in search_params.keys():
+        logger.critical(
+            "The search params file {} needs a \"param_grid\" field."\
+            .format(search_params_file))
+        raise ValueError(
+            "The search params file {} needs a \"param_grid\" field."\
+            .format(search_params_file))
     
     grid = ParameterGrid(search_params['param_grid'])
     fit_params = search_params['fit_params'] \

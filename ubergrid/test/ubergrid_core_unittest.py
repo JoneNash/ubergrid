@@ -698,8 +698,6 @@ class UbergridCoreUnitTest(TestCase):
             self.assertEqual(sorted(list(result.keys())),
                               sorted(result_keys_truth))
             self.assertEqual(result["model_id"], model_id)
-
-
         
         # Test that the _main function raises a ValueError when the validation
         # set has different columns.
@@ -757,3 +755,36 @@ class UbergridCoreUnitTest(TestCase):
                      CLASSIFICATION_DIR + "/other_training.csv",
                      output_dir,
                      validation_file = validation_file)
+        
+        # Tests that the _main function raises a ValueError when the 
+        # "estimator" field is missing from the search params.
+        with self.assertRaises(ValueError):
+            bad_search_params = {
+                "param_grid": {
+                    "n_estimators": [100, 200, 300],
+                    "max_depth": [2,4]
+                }
+            }
+            bad_search_params_file = CLASSIFICATION_DIR + "/bad_search.json"
+            with open(bad_search_params_file, "w") as out:
+                out.write(json.dumps(bad_search_params) + "\n")
+
+            ug._main(bad_search_params_file,
+                     "target",
+                     training_file,
+                     output_dir)
+
+        # Tests that the _main function raises a ValueError when the
+        # "param_grid" field is missing from the search params.
+        with self.assertRaises(ValueError):
+            bad_search_params = {
+                "estimator": CLASSIFICATION_DIR + "/classifier.pkl"
+            }
+            bad_search_params_file = CLASSIFICATION_DIR + "/bad_search.json"
+            with open(bad_search_params_file, "w") as out:
+                out.write(json.dumps(bad_search_params) + "\n")
+
+            ug._main(bad_search_params_file,
+                     "target",
+                     training_file,
+                     output_dir)

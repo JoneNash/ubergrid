@@ -233,7 +233,7 @@ def _cross_validate(estimator: BaseEstimator,
         logger.info(
             "Completed training model {} on cross validation "\
             .format(model_id) + 
-            "training set. Took {} seconds."\
+            "training set. Took {:.3f} seconds."\
                 .format(cv_train_stop - cv_train_start))
         
         logger.info("Evaluating model {} on cross validation training set."\
@@ -247,7 +247,7 @@ def _cross_validate(estimator: BaseEstimator,
                 "cross_validation_training")
         logger.info("Completed evaluating model {} on cross validation "\
             .format(model_id) +
-            "training set. Took {} seconds for {} records.".format(
+            "training set. Took {:.3f} seconds for {} records.".format(
                 cv_training_results[
                     "cross_validation_training_total_prediction_time"],
                 cv_training_results[
@@ -263,7 +263,7 @@ def _cross_validate(estimator: BaseEstimator,
                             "cross_validation")
         logger.info("Completed evaluating model {} on cross validation "\
             .format(model_id) +
-            "test set. Took {} seconds for {} records.".format(
+            "test set. Took {:.3f} seconds for {} records.".format(
                 cv_validation_results[
                     "cross_validation_total_prediction_time"],
                 cv_validation_results[
@@ -411,10 +411,10 @@ def _train_and_evaluate(estimator: BaseEstimator,
         _train_model(estimator, grid_search_context)
     
     logger.info(
-        "Model {} trained in {} seconds.".format(
+        "Model {} trained in {:.3f} seconds.".format(
             model_id, training_results["training_time_total"]))
     logger.info(
-        "Model {} training set prediction time: {} for {} records.".format(
+        "Model {} training set prediction time: {:.3f} for {} records.".format(
             model_id, 
             training_results["training_total_prediction_time"],
             training_results["training_total_prediction_records"]))
@@ -434,7 +434,7 @@ def _train_and_evaluate(estimator: BaseEstimator,
 
     if len(validation_results) > 0:
         logger.info(
-            "Model {} validation set evaluation time: {} for {} records."\
+            "Model {} validation set evaluation time: {:.3f} for {} records."\
             .format(model_id, 
                     validation_results["validation_total_prediction_time"],
                     validation_results["validation_total_prediction_records"]))

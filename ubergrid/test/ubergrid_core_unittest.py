@@ -13,7 +13,7 @@ from sklearn.linear_model import SGDRegressor
 from sklearn.externals import joblib
 from sklearn.model_selection import train_test_split, ParameterGrid
 
-import ubergrid as ug
+import ubergrid_core as ug
 
 TEST_OUTPUT_DIR = "classification_test"
 CLASSIFICATION_DIR = "classification"
@@ -190,7 +190,7 @@ def tearDownModule():
     subprocess.run(['rm', '-rf', REGRESSION_DIR])
     subprocess.run(['rm', '-rf', TEST_OUTPUT_DIR])
 
-class UbergridUnitTest(TestCase):
+class UbergridCoreUnitTest(TestCase):
 
     def test_evaluate_model_classifier(self) -> None:
         """ Tests the _evaluate_model function for the binary classification

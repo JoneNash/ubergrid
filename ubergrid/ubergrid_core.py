@@ -327,21 +327,36 @@ def _train_and_evaluate(estimator: BaseEstimator,
 
                 # The metrics for cross validation, if cross validation was
                 # performed.
-                "cross_validation_training_time_total_all": list_of_times,
-                "cross_validation_training_time_total_mean": mean_training_time,
+                "cross_validation_{metric}": mean_value_metric,
+                # ... other metrics.
+                "cross_validation_total_prediction_time": mean_prediction_time,
+                "cross_validation_total_prediction_records": 
+                    mean_number_of_records,
+                
+                "cross_validation_{metric}_all": list_of_metric_values,
+                # ... other metrics.
                 "cross_validation_total_prediction_time_all":
                     list_of_prediction_times,
-                "cross_validation_total_prediction_time_mean":
-                    mean_total_prediction_time,
                 "cross_validation_total_prediction_records_all":
-                    list_of_numbers_of_records,
-                "cross_validation_total_prediction_records_mean":
-                    mean_number_of_records,
-                "cross_validation_{metric}_all": list_of_metric_values,
-                "cross_validation_{metric}_mean": mean_metric_value,
-                "cross_validation_{metric}_all": list_of_metric_values,
-                "cross_validation_{metric}_mean": mean_metric_value,
-                # ...
+                    list_of_prediction_records,
+                
+                "cross_validation_training_{metric}": mean_metric_on_training,
+                # ... other metrics.
+                "cross_validation_training_total_prediction_time":
+                    mean_total_prediction_time,
+                "cross_validation_training_total_prediction_records":
+                    mean_total_prediction_records,
+                "cross_validation_training_time_total":
+                    mean_time_to_train,
+
+                "cross_validation_training_{metric}_all": list_of_metric_values,
+                # ... other metrics.
+                "cross_validation_training_total_prediction_time_all":
+                    list_of_training_prediction_times,
+                "cross_validation_training_total_prediction_records_all":
+                    list_of_training_prediction_records,
+                "cross_validation_training_time_total_all":
+                    list_of_training_times,
 
                 # The metrics for validation, if validation was performed.
                 "validation_total_prediction_time": 

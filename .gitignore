@@ -8,3 +8,9 @@ dist/
 ubergrid.egg-info
 ubergrid/bin
 ubergrid/notebooks
+sample/src
+sample/models
+sample/booster.pkl
+sample/booster_grid_params.json
+sample/data/donations.csv
+sample/data/transfusion.data

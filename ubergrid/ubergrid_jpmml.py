@@ -2,6 +2,7 @@ import subprocess
 import logging
 import os
 import json
+import sys
 
 from time import time
 
@@ -20,7 +21,9 @@ try:
 except Exception as e:
     logger.critical("sklearn2pmml is not installed. "
                     "This is required for PMML support.")
-    raise e
+    logger.critical("Install with pip install -e git+https://github.com/jpmml"
+                    "/sklearn2pmml#egg=sklearn2pmml")
+    sys.exit(1)
 
 from sklearn_pandas import DataFrameMapper
 

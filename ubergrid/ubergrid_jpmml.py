@@ -190,7 +190,8 @@ def _main(results_dir: str,
                 result["model_id"]))
             pmml_results = \
                 _time_pmml(pmml_file, pmml_evaluator, file_to_evaluate)
-            logger.info("Done timing model {}. Took {} seconds for {} records."\
+            logger.info(
+                "Done timing model {}. Took {:.3f} seconds for {} records."\
                 .format(result['model_id'], 
                         pmml_results['pmml_total_prediction_time'],
                         pmml_results['pmml_total_prediction_records']))

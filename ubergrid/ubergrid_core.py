@@ -678,7 +678,8 @@ def _main(search_params_file: str,
     # The output directory could exist, especially if some of the results were
     # completed in a previous run.
     if not os.path.exists(output_dir):
-        logger.info("{} does not exist. Creating {}.".format(output_dir))
+        logger.info(
+            "{} does not exist. Creating {}.".format(output_dir, output_dir))
         os.mkdir(output_dir)
 
     training_set = read_csv(training_file)

@@ -1,1 +1,1 @@
-from ubergrid import read_results, read_results_frame, get_model
+from .ubergrid import read_results, read_results_frame, get_model

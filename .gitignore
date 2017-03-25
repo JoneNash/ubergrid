@@ -3,3 +3,8 @@ doc/build/
 *.jar
 ubergrid/src/pip-delete-this-directory.txt
 ubergrid/src/sklearn2pmml
+build/
+dist/
+ubergrid.egg-info
+ubergrid/bin
+ubergrid/notebooks

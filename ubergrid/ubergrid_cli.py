@@ -38,20 +38,16 @@ def run(search_params_file: str,
     """ 
     Runs the grid search.
 
-    Usage: 
+    Arguments:
 
-    ubergrid search_params_file target_col training_file output_dir [OPTIONS]
-
-    Positional arguments:
-
-        search_params_file - The JSON file containing the grid search
+        SEARCH_PARAMS_FILE - The JSON file containing the grid search
             parameters.
 
-        target_col - The name of the target variable column.
+        TARGET_COL - The name of the target variable column.
 
-        training_file - The name of the training file (csv with headers).
+        TRAINING_FILE - The name of the training file (csv with headers).
 
-        output_dir - The name of the directory that will hold the results.
+        OUTPUT_DIR - The name of the directory that will hold the results.
         If it does not exist, ubergrid will make it.
     """
     ugc._main(search_params_file,
@@ -80,12 +76,8 @@ def jpmml(results_dir: str,
     """ 
     Takes an existing ubergrid search and builds PMML files with JPMML.
 
-    Usage:
+    Arguments:
 
-        ubergrid jpmml results [OPTIONS]
-
-    Positional arguments:
-
-        results - The name of the directory with a completed ubergrid run.
+        RESULTS_DIR - The name of the directory with a completed ubergrid run.
     """
     ugj._main(results_dir, pmml_evaluator, file_to_evaluate)

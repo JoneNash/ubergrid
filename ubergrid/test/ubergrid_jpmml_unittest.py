@@ -12,7 +12,7 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.externals import joblib
 
 import ubergrid_jpmml as ugp
-import ubergrid as ug
+import ubergrid_core as ugc
 
 TEST_OUTPUT_DIR = "classification_test"
 TEST_INPUT_DIR = "classification"
@@ -61,7 +61,7 @@ def setUpModule():
     target_col = "target"
     output_dir = TEST_OUTPUT_DIR
 
-    ug._main(search_params_file,
+    ugc._main(search_params_file,
              target_col,
              training_file,
              output_dir)

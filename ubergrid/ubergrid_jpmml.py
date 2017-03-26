@@ -28,12 +28,6 @@ except Exception as e:
 from sklearn_pandas import DataFrameMapper
 
 def _count_lines(filename: str) -> int:
-    """ Counts the lines in the file using the shell.
-
-        :param filename: The name of the file to count lines for.
-
-        :returns: The number of lines in the file.
-    """
     input_file = subprocess.Popen(["cat", filename], stdout=subprocess.PIPE)
     word_counter = subprocess.Popen(["wc", "-l"], 
         stdin=input_file.stdout,
@@ -43,12 +37,6 @@ def _count_lines(filename: str) -> int:
     return num_lines
 
 def _make_pmml(model_results: Dict[str,Any]) -> str:
-    """ Creates the PMML file for the estimator.
-
-        :param model_results: The results dict for the model.
-
-        :returns: The name of the PMML file for the model.
-    """
     training_file = model_results['training_file']
     target = model_results['target']
     model_file = model_results['model_file']
@@ -74,18 +62,6 @@ def _make_pmml(model_results: Dict[str,Any]) -> str:
 
 def _time_pmml(pmml_file: str, pmml_evaluator: str, file_to_evaluate: str) -> \
     Dict[str, Any]:
-    """ Evaluates the PMML file and times it.
-
-        :param pmml_file: The name of the pmml file with the model.
-
-        :param pmml_evaluator: The name of the PMML evaluator executable jar.
-
-        :param file_to_evaluate: The name of the file to evaluate timing for.
-
-        :returns:
-            A dict with the number of records in the file and the total time
-            for prediction.
-    """
     start = time()
     subprocess.run([
         "java",
@@ -109,45 +85,6 @@ def _time_pmml(pmml_file: str, pmml_evaluator: str, file_to_evaluate: str) -> \
 def _main(results_dir: str,
           pmml_evaluator: str = None,
           file_to_evaluate: str = None) -> None:
-
-    """ Creates and optionally times a PMML file for each estimator in the
-        provided results grid.
-
-        :param results_dir:
-            The directory where a complete grid search results.json file lives.
-        
-        :param pmml_evaluator: 
-            The name of the PMML evaluator executable jar. Default: None.
-
-        :param file_to_evaluate:
-            The name of the csv containing the values to time the PMML file 
-            with. The CSV file must have a header.
-
-        :raises ValueError: 
-            If the ``results_dir`` doesn't contain a ``results.json`` file.
-        
-        :raises ValueError:
-            If the ``file_to_evaluate`` option is provided without a 
-            corresponding ``pmml_evaluator`` argument.
-        
-        :raises ValueError: If the ``pmml_evaluator`` argument doesn't exist.
-
-        :raises ValueError: If the ``file_to_evaluate`` argument doesn't exist.
-
-        :returns:
-            Nothing. Writes a PMML file for every model in the grid, and 
-            modifies the ``results.json`` file to include the following fields::
-
-                {
-                    # Everything in results.json PLUS:
-
-                    "pmml_file": "/path/to/model.pmml",
-
-                    # If PMML timing was selected.
-                    "pmml_total_prediction_time": time_for_pmml_prediction,
-                    "pmml_total_prediction_records": number_of_pmml_predictions
-                }
-    """
     results_file = results_dir + "/results.json"
     # Validate the inputs.
     if not os.path.exists(results_file):

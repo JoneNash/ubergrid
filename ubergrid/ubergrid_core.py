@@ -51,35 +51,6 @@ def _evaluate_model(estimator: BaseEstimator,
                     y: DataFrame,
                     grid_search_context: Dict[str, Any],
                     prefix: str) -> Dict[str, Any]:
-    """ Evaluates the performance of the model on the provided data, for the
-        provided metrics, and returns a dictionary of results.
-
-        :param estimator: A scikit-learn estimator object (trained).
-
-        :param grid_search_context:
-            A dictionary containing information about the grid search.
-        
-        :param X: The data to evaluate the model on, without the true value.
-        
-        :param y: The true values for the data in X.
-        
-        :param prefix: A string to prefix the fields in the results dict with.
-
-        :raises ValueError:
-            If there's a metric that cannot be calculated from ``SCORERS``.
-        
-        :returns: 
-            The results in a dictionary, with one field for each metric,
-            named as ``{prefix}_{metric}``, plus a couple of fields with timing
-            information::
-
-                {
-                    "{prefix}_{metric1}": value,
-                    "{prefix}_{metric2}": value,
-                    "{prefix}_total_prediction_time": time_in_seconds,
-                    "{prefix}_total_prediction_records": number_of_records
-                }
-    """
     metrics = grid_search_context['metrics']
     # Validate that the metrics are in the available list.
     if len(set(metrics) - AVAILABLE_METRICS) != 0:
@@ -115,28 +86,6 @@ def _evaluate_model(estimator: BaseEstimator,
 def _train_model(estimator: BaseEstimator,
                  grid_search_context: Dict[str, Any]) \
                  -> Tuple[Dict[str, Any], BaseEstimator]:
-    """ Trains the model on the provided data, and evaluates it for the provided
-        metrics.
-
-        :param estimator: A scikit-learn estimator object (untrained).
-
-        :param grid_search_context:
-            A dictionary containing information related to the grid search.
-
-        :returns: 
-            A tuple containing the results in a dict, with fields named
-            as ``training_{metric}``, and the trained estimator. The dict also 
-            contains information related to the timing of the model. Here's an
-            example::
-
-                {
-                    "training_{metric}": value,
-                    "training_{metric}": value,
-                    "training_total_prediction_time": time_for_predictions,
-                    "training_total_prediction_records": number_of_records,
-                    "training_time_total": time_for_training
-                }
-    """
     X = grid_search_context['X_train']
     y = grid_search_context['y_train']
     fit_params = grid_search_context['fit_params']
@@ -153,65 +102,6 @@ def _train_model(estimator: BaseEstimator,
 def _cross_validate(estimator: BaseEstimator,
                     model_id: int,
                     grid_search_context: Dict[str, Any]) -> Dict[str, Any]:
-    """ Performs K-Fold cross validation on the estimator for a given training
-        set.
-
-        :param estimator: The estimator to be cross validated.
-
-        :param model_id: The model identifier.
-
-        :param grid_search_context:
-            A dictionary containing values related to the grid search.
-
-        :returns:
-            A dict containing evaluation metrics for the cross validation. There
-            are two sets of metrics: one set of lists that contain values for
-            each validation split, and another that contains the means of the
-            values for all of the splits. Metric fields are named 
-            ``cross_validation_{metric}_all`` for the lists and 
-            ``cross_validation_{metric}`` for the means. These are also repeated
-            for the training cycles, prefixed with 
-            ``cross_validation_training_...``. The dict also contains
-            information about the timing of the training and evaluation of the
-            model on the splits. Here's an example::
-
-                {
-                    # Training set values.
-                    "cross_validation_training_{metric}_all": 
-                        list_of_training_set_metric_values,
-                    "cross_validation_training_{metric}":
-                        mean_of_training_set_metric_list,
-                    # ... for each metric.
-                    
-                    "cross_validation_training_total_prediction_time_all":
-                        list_of_training_set_prediction_times,
-                    "cross_validation_training_total_prediction_time":
-                        mean_of_training_set_prediction_time_list,
-                    "cross_validation_training_total_prediction_records_all":
-                        list_of_training_record_counts,
-                    "cross_validation_training_total_prediction_records":
-                        mean_of_training_record_count_list,
-                    "cross_validation_training_time_total_all":
-                        list_of_training_times,
-                    "cross_validation_training_time_total_mean":
-                        mean_of_training_time_list,
-
-                    # Test set values.
-                    "cross_validation_{metric}_all": list_of_metric_values,
-                    "cross_validation_{metric}": mean_of_metric_list,
-                    # ... for each metric.
-                    
-                    "cross_validation_total_prediction_time_all":
-                        list_of_prediction_times,
-                    "cross_validation_total_prediction_time":
-                        mean_of_prediction_time_list,
-                    "cross_validation_total_prediction_records_all":
-                        list_of_prediction_record_counts,
-                    "cross_validation_total_prediction_records":
-                        mean_of_prediction_record_count_list
-                }
-    """
-
     n_splits = grid_search_context['cross_validation']
     X_train = grid_search_context['X_train']
     y_train = grid_search_context['y_train']
@@ -290,98 +180,6 @@ def _train_and_evaluate(estimator: BaseEstimator,
                         params: Dict[str, Any],
                         model_id: int,
                         grid_search_context: Dict[str, Any]) -> None:
-    """ Performs training and evaluation on a scikit-learn estimator, saving the
-        results to disk.
-    
-        If there are already results in the provided output path,
-        this function skips calculations (for larger grids this allows jobs to 
-        be resumed if they fail). This function is designed in this way so that 
-        it can be executed in parallel. It writes two files: a joblib-pickled 
-        model (in``{output_dir}/model_{model_id}.pkl``), and
-        a results file that contains a single line JSON object 
-        (``output_dir/results_{}.json``). That object contains
-        all of the performance and timing information related to the run. 
-        Here's an example of that file::
-
-            {
-                # Files used to build and evaluate the model.
-                "training_file": "/path/to/training.csv",
-                "model_file": "/path/to/model.pkl",
-                "validation_file": "/path_to_validation.csv", # If used.
-
-                # The name of the target column.
-                "target": "target_col_name",
-
-                # Parameters that identify the model
-                "param_1": param_value_1,
-                "param_2": param_value_2,
-                # ...
-
-                # The metrics for training
-                "training_time_total": time_for_training,
-                "training_total_prediction_time": time_for_predictions,
-                "training_total_prediction_records": number_of_records,
-                "training_{metric}": value,
-                "training_{metric}": value,
-                # ...
-
-                # The metrics for cross validation, if cross validation was
-                # performed.
-                "cross_validation_{metric}": mean_value_metric,
-                # ... other metrics.
-                "cross_validation_total_prediction_time": mean_prediction_time,
-                "cross_validation_total_prediction_records": 
-                    mean_number_of_records,
-                
-                "cross_validation_{metric}_all": list_of_metric_values,
-                # ... other metrics.
-                "cross_validation_total_prediction_time_all":
-                    list_of_prediction_times,
-                "cross_validation_total_prediction_records_all":
-                    list_of_prediction_records,
-                
-                "cross_validation_training_{metric}": mean_metric_on_training,
-                # ... other metrics.
-                "cross_validation_training_total_prediction_time":
-                    mean_total_prediction_time,
-                "cross_validation_training_total_prediction_records":
-                    mean_total_prediction_records,
-                "cross_validation_training_time_total":
-                    mean_time_to_train,
-
-                "cross_validation_training_{metric}_all": list_of_metric_values,
-                # ... other metrics.
-                "cross_validation_training_total_prediction_time_all":
-                    list_of_training_prediction_times,
-                "cross_validation_training_total_prediction_records_all":
-                    list_of_training_prediction_records,
-                "cross_validation_training_time_total_all":
-                    list_of_training_times,
-
-                # The metrics for validation, if validation was performed.
-                "validation_total_prediction_time": 
-                    time_for_predictions_validation,
-                "validation_total_prediction_records": 
-                    number_of_validation_records,
-                "validation_{metric}": value,
-                "validation_{metric}": value,
-                # ...
-
-            }
-
-        :param estimator: The scikit-learn estimator object.
-
-        :param params: The parameters for building the model, as a dict.
-
-        :param model_id: The integer identifying the model.
-
-        :param grid_search_context:
-            A dictionary holding parameters and values related to the grid
-            search. 
-
-        :returns: Nothing, writes to the files described above.
-        
-    """
     # Unpack the grid search context.
     output_dir = grid_search_context['output_dir']
     cross_validation = grid_search_context['cross_validation']
@@ -481,15 +279,6 @@ def _train_and_evaluate(estimator: BaseEstimator,
 
 def _dry_run(grid: ParameterGrid,
              grid_search_context: Dict[str, Any]):
-    """ Logs the actions that will execute in the grid search without actually
-        executing them.
-
-        :param grid: A scikit-learn ParameterGrid object.
-        
-        :param grid_search_context:
-            A dictionary containing data about the grid search.
-    """
-
     # Unpack the grid search context.
     output_dir = grid_search_context['output_dir']
     fit_params = grid_search_context['fit_params']
@@ -524,135 +313,6 @@ def _main(search_params_file: str,
           cross_validation: int = None,
           n_jobs: int = 1,
           dry_run: bool = False) -> None:
-    """ Executes an entire parameter grid, saving all results and models to disk.
-
-        This method runs the ``_train_and_evaluate`` function on each combination
-        of parameters. It's the core function for the module. It loads the estimator
-        from a path specified in the ``search_param_file`` using joblib's pickling
-        capabilities. It builds the grid from that JSON file as well. This function
-        creates (if necessary) and writes all models into a specified
-        directory. It also places a file called ``results.json`` that contains, for
-        each model, one JSON object that has all of the information used to build
-        the model, and all of its performance characteristics.
-        Here's an example of one line::
-
-            {
-                # Files used to build and evaluate the model.
-                "training_file": "/path/to/training.csv",
-                "model_file": "/path/to/model.pkl",
-                "validation_file": "/path_to_validation.csv", # If used.
-
-                # The name of the target column.
-                "target": "target_col_name",
-
-                # Parameters that identify the model
-                "param_1": param_value_1,
-                "param_2": param_value_2,
-                # ...
-
-                # The metrics for training
-                "training_time_total": time_for_training,
-                "training_prediction_time": time_for_predictions,
-                "training_total_prediction_records": number_of_records,
-                "training_{metric}": value,
-                "training_{metric}": value,
-                # ...
-
-                # The metrics for cross validation, if cross validation was
-                # performed.
-                "cross_validation_training_time_total_all": list_of_times,
-                "cross_validation_training_time_total_mean": mean_training_time,
-                "cross_validation_total_prediction_time_all":
-                    list_of_prediction_times,
-                "cross_validation_total_prediction_time_mean":
-                    mean_total_prediction_time,
-                "cross_validation_total_prediction_records_all":
-                    list_of_numbers_of_records,
-                "cross_validation_total_prediction_records_mean":
-                    mean_number_of_records,
-                "cross_validation_{metric}_all": list_of_metric_values,
-                "cross_validation_{metric}_mean": mean_metric_value,
-                "cross_validation_{metric}_all": list_of_metric_values,
-                "cross_validation_{metric}_mean": mean_metric_value,
-                # ...
-
-                # The metrics for validation, if validation was performed.
-                "validation_prediction_time": time_for_predictions_validation,
-                "validation_total_prediction_records": number_of_validation_records,
-                "validation_{metric}": value,
-                "validation_{metric}": value,
-                # ...
-
-            }
-
-        :param search_params_file: 
-            The name of the JSON file with the search 
-            parameters. The file itself should have the following structure::
-            
-                {
-                    # These are passed to the fit method of each estimator.
-                    "fit_params": {
-                        "fit_param_1": value,
-                        "fit_param_2": value
-                    },
-                    "param_grid": {
-                        "param_1": [value, value, value],
-                        "param_2": [value, value, value]
-                    },
-                    "scoring": [metric, metric, metric],
-                    # The estimator should be pickled with joblib.
-                    "estimator": "/path/to/estimator.pkl"
-                }
-    
-        :param target_col: 
-            The name of the column containing the target variable.
-    
-        :param training_file: The name of the file containing the training data.
-
-        :param output_dir: The name of the output directory.
-
-        :param validation_file: 
-            The name of the file containing the validation data.
-            Default: None.
-
-        :param cross_validation:
-            The number of K-Fold cross validations to perform.
-            Default: None.
-
-        :param n_jobs: 
-            The number of parallel jobs to execute the grid for.
-            Default: 1.
-
-        :param dry_run:
-            Whether to execute a "dry run", which prints out the steps
-            that will be executed.
-            Default: False
-
-        :raises ValueError: If the ``search_params_file`` doesn't exist.
-
-        :raises ValueError: If the ``training_set_file`` doesn't exist.
-
-        :raises ValueError: If the ``validation_set_file`` doesn't exist.
-
-        :raises ValueError: If the ``target_col`` is not in the training set.
-
-        :raises ValueError: If the ``target_col`` is not in the validation set.
-
-        :raises ValueError: 
-            If the validation set is present and doesn't have the same columns 
-            as the training set.
-
-        :raises ValueError: 
-            If the "estimator" field isn't in the search params file.
-
-        :raises ValueError:
-            If the "param_grid" field isn't in the search params file.
-        
-        :returns: 
-            Nothing. Writes all of the models in the grid as pickled files in
-            ``output_dir`` along with a ``results.json``.
-    """
-
     # Validate that the search parameter file exists.
     if not os.path.exists(search_params_file):
         logger.critical("{} does not exist.".format(search_params_file))
